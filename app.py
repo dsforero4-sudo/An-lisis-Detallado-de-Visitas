@@ -12,11 +12,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS Personalizados para replicar la interfaz de la imagen
+# Estilos CSS Personalizados
 st.markdown("""
     <style>
     .stApp { background-color: #1A1F2C; color: #FFFFFF; }
-    .kpi-container { display: flex; justify-content: space-between; margin-bottom: 25px; }
     .kpi-card {
         background-color: #262C3A;
         border-radius: 10px;
@@ -31,6 +30,21 @@ st.markdown("""
 
 st.title("E-Metrics BI — Pharmadvisor")
 st.caption("Panel de Control & Auditoría de Calidad de Visitas Médicas (Interactivo en Vivo)")
+
+# Función para calcular la Tasa Real de Copy-Paste
+def get_copy_paste_rate(df_sub):
+    total = len(df_sub)
+    if total == 0:
+        return 0.0
+    
+    # Si hay una frase principal que cubre >= 95% de las visitas del representante/subconjunto
+    max_freq = df_sub['Comentario_str'].value_counts().max() if 'Comentario_str' in df_sub.columns else 0
+    if (max_freq / total) >= 0.95 and total >= 10:
+        return 100.0
+    
+    # Cálculo estándar de duplicidad
+    dup_cnt = df_sub.duplicated(subset=['Comentario_str']).sum() if 'Comentario_str' in df_sub.columns else 0
+    return round((dup_cnt / total) * 100, 1)
 
 # 2. Carga de Archivo Excel/CSV
 uploaded_file = st.file_uploader("Cargar Reporte de Visitas (Excel / CSV)", type=["xlsx", "xls", "csv"])
@@ -74,8 +88,7 @@ if uploaded_file is not None:
     # Cálculos
     total_visitas = len(df_filtered)
     medicos = df_filtered['Médicos'].nunique() if 'Médicos' in df_filtered.columns else 0
-    dup_cnt = df_filtered.duplicated(subset=['Representante', 'Comentario_str']).sum() if 'Representante' in df_filtered.columns else 0
-    pct_dup = (dup_cnt / total_visitas * 100) if total_visitas > 0 else 0
+    pct_dup = get_copy_paste_rate(df_filtered)
     score_calidad = max(0, round(100 - pct_dup, 1))
 
     # 4. Tarjetas KPI
@@ -94,7 +107,7 @@ if uploaded_file is not None:
 
     with g1:
         if 'Región' in df_filtered.columns and total_visitas > 0:
-            reg_list = [{'Región': r, '% Duplicidad': round(grp.duplicated(subset=['Representante', 'Comentario_str']).sum() / len(grp) * 100, 1)} 
+            reg_list = [{'Región': r, '% Duplicidad': get_copy_paste_rate(grp)} 
                         for r, grp in df_filtered.groupby('Región')]
             reg_df = pd.DataFrame(reg_list)
             
@@ -136,7 +149,7 @@ if uploaded_file is not None:
 
     with g4:
         if 'Representante' in df_filtered.columns:
-            rep_list = [{'Representante': r, '% Copy-Paste': round(grp.duplicated(subset=['Comentario_str']).sum() / len(grp) * 100, 1)} 
+            rep_list = [{'Representante': r, '% Copy-Paste': get_copy_paste_rate(grp)} 
                         for r, grp in df_filtered.groupby('Representante') if len(grp) >= 5]
             rep_df = pd.DataFrame(rep_list).sort_values(by='% Copy-Paste', ascending=False).head(10)
 
