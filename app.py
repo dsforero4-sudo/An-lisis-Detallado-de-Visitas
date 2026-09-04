@@ -29,7 +29,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Pharmadvisor | E-Metrics BI Executive")
-st.caption("Panel de Inteligencia de Mercado, Auditoría SFE y Voz del Médico (Ciclo 2026-7)")
+st.caption("Panel de Inteligencia de Mercado, Auditoría SFE y Voz del Médico")
 
 def get_copy_paste_rate(df_sub):
     total = len(df_sub)
@@ -90,7 +90,7 @@ if uploaded_file is not None:
     st.markdown("###")
 
     # PESTAÑAS DEDICADAS POR ROL
-    tab_reg, tab_linea = st.tabs(["🏛️ GERENCIAS REGIONALES (SFE & Territorio)", "📦 GERENCIAS DE LÍNEA (Share of Voice & Producto)"])
+    tab_reg, tab_linea = st.tabs(["🏛️ GERENCIAS REGIONALES (SFE & Territorio)", "📦 GERENCIAS DE LÍNEA (Share of Voice & Voz del Médico)"])
 
     # --- PESTAÑA 1: GERENCIAS REGIONALES ---
     with tab_reg:
@@ -119,7 +119,6 @@ if uploaded_file is not None:
                 fig2.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350, yaxis={'autorange': 'reversed'})
                 st.plotly_chart(fig2, use_container_width=True)
 
-        # Tabla interactiva para revisión en comité
         st.markdown("#### Tabla de Control de la Fuerza de Ventas")
         if 'Representante' in df_filtered.columns:
             tabla_sfe = pd.DataFrame([
@@ -163,6 +162,34 @@ if uploaded_file is not None:
                           title='<b>Ejes Temáticos y Barreras en Consultorio</b>')
             fig4.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350)
             st.plotly_chart(fig4, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("#### 💬 Módulos de Voz del Médico (Comentarios Reales de Consultorio)")
+        st.caption("Filtrado automático de notas genéricas/duplicadas para analizar únicamente las observaciones genuinas reportadas en campo.")
+
+        # Obtener comentarios genuinos no duplicados por representante
+        comentarios_genuinos = df_filtered[~df_filtered.duplicated(subset=['Representante', 'Comentario_str'], keep=False)].copy()
+        
+        # Selector de Búsqueda de Términos
+        kw_input = st.text_input("🔍 Filtrar Comentarios por Palabra Clave (Ej: Mipres, Sabor, Aceptación, Muestra, Competencia, PAP)", "")
+
+        if kw_input:
+            comentarios_display = comentarios_genuinos[comentarios_genuinos['Comentario_str'].str.contains(kw_input, case=False, na=False)]
+        else:
+            comentarios_display = comentarios_genuinos
+
+        cols_vista = ['Línea', 'Especialidad Promocional', 'Representante', 'Comentario_str']
+        cols_presentes = [c for c in cols_vista if c in comentarios_display.columns]
+
+        st.markdown(f"**Se encontraron {len(comentarios_display):,} observaciones cualitativas reales:**")
+        st.dataframe(
+            comentarios_display[cols_presentes].rename(columns={
+                'Especialidad Promocional': 'Especialidad Médico',
+                'Comentario_str': 'Comentario Registrado en Consultorio'
+            }),
+            use_container_width=True,
+            height=300
+        )
 
 else:
     st.info("Por favor arrastra y suelta el archivo Excel de visitas para desplegar el Dashboard Ejecutivo.")
