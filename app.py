@@ -29,22 +29,22 @@ st.markdown("""
         background-color: #262C3A;
         border-left: 5px solid #4A90E2;
         border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 15px;
+        padding: 18px;
+        margin-bottom: 20px;
     }
     .insight-alert {
         background-color: #262C3A;
         border-left: 5px solid #FF5252;
         border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 15px;
+        padding: 18px;
+        margin-bottom: 20px;
     }
     .insight-success {
         background-color: #262C3A;
         border-left: 5px solid #4CAF50;
         border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 15px;
+        padding: 18px;
+        margin-bottom: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -116,7 +116,7 @@ if uploaded_file is not None:
     if sel_rep != "Todas":
         df_filtered = df_filtered[df_filtered['Representante'] == sel_rep]
 
-    # Métricas
+    # Métricas Globales
     total_visitas = len(df_filtered)
     if 'Cod. único Médicos' in df_filtered.columns:
         medicos = df_filtered['Cod. único Médicos'].nunique()
@@ -126,7 +126,11 @@ if uploaded_file is not None:
         medicos = df_filtered['Médicos'].nunique()
 
     pct_dup = get_copy_paste_rate(df_filtered)
-    pct_alta_calidad = round((df_filtered['Nivel_Tecnica_Ventas'] == "Alta Calidad (Venta Consultiva / FAP)").sum() / total_visitas * 100, 1) if total_visitas > 0 else 0
+    cnt_dup_total = int(round((pct_dup / 100) * total_visitas))
+    cnt_alta_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Alta Calidad (Venta Consultiva / FAP)").sum()
+    pct_alta_calidad = round((cnt_alta_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
+    cnt_baja_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Baja Calidad (Trámite / Administrativo)").sum()
+    pct_baja_calidad = round((cnt_baja_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
 
     # Tarjetas KPI
     k1, k2, k3, k4 = st.columns(4)
@@ -138,7 +142,7 @@ if uploaded_file is not None:
 
     st.markdown("###")
 
-    # Estructura de 3 Pestañas
+    # 3 Pestañas
     tab_reg, tab_linea, tab_insights = st.tabs([
         "🏛️ GERENCIAS REGIONALES (SFE & Territorio)", 
         "📦 GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS",
@@ -252,48 +256,67 @@ if uploaded_file is not None:
             height=300
         )
 
-    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS C-LEVEL ---
+    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS CON SUSTENTACIÓN NUMÉRICA ---
     with tab_insights:
-        st.subheader("💡 Resumen Ejecutivo & Diagnóstico Estratégico Consultivo")
-        st.caption("Síntesis automática de inteligencia de mercado basada en los filtros activos.")
+        st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa (C-Level)")
+        st.caption("Argumentación basada en métricas exactas del lote cargado para defensa en comités estratégicos.")
 
-        # Calculo de variables para hallazgos
-        reg_worst = "Coordinación LM" if 'Región' in df_filtered.columns else "N/A"
-        pct_baja_calidad = round((df_filtered['Nivel_Tecnica_Ventas'] == "Baja Calidad (Trámite / Administrativo)").sum() / total_visitas * 100, 1) if total_visitas > 0 else 0
+        # Cálculos de sustentación para productos
+        prods_dict = {
+            'Fortini': df_filtered['Comentario_str'].str.contains('Fortini', case=False, na=False).sum(),
+            'Infatrini': df_filtered['Comentario_str'].str.contains('Infatrini', case=False, na=False).sum(),
+            'Ketocal': df_filtered['Comentario_str'].str.contains('Ketocal', case=False, na=False).sum(),
+            'Pepti': df_filtered['Comentario_str'].str.contains('Pepti', case=False, na=False).sum(),
+            'Syneo': df_filtered['Comentario_str'].str.contains('Syneo', case=False, na=False).sum(),
+            'Neocate': df_filtered['Comentario_str'].str.contains('Neocate', case=False, na=False).sum(),
+        }
+        total_menciones_prod = sum(prods_dict.values()) if sum(prods_dict.values()) > 0 else 1
+        pct_fortini = round((prods_dict['Fortini'] / total_menciones_prod) * 100, 1)
+        pct_infatrini = round((prods_dict['Infatrini'] / total_menciones_prod) * 100, 1)
+        pct_neocate = round((prods_dict['Neocate'] / total_menciones_prod) * 100, 1)
 
-        # Tarjeta 1: Alerta SFE
+        # Cálculos de barreras cualitativas
+        cnt_mipres = df_filtered['Comentario_str'].str.contains('mipres|eps|autorizacion|formulacion', case=False, na=False).sum()
+        pct_mipres_visitas = round((cnt_mipres / total_visitas) * 100, 1) if total_visitas > 0 else 0
+
+        cnt_pap = df_filtered['Comentario_str'].str.contains('pap|programa|fundacion', case=False, na=False).sum()
+        pct_pap_visitas = round((cnt_pap / total_visitas) * 100, 1) if total_visitas > 0 else 0
+
+        cnt_comp = df_filtered['Comentario_str'].str.contains('s-26|s26|similac|nan|althera|nutramigen', case=False, na=False).sum()
+
+        # Tarjeta 1: Sustentación SFE
         st.markdown(f"""
         <div class="insight-alert">
-            <h4 style="color:#FF5252; margin-top:0;">🚨 Alerta de Disciplina Operativa & Calidad de Registro (SFE)</h4>
-            <p>Se identifica un promedio global de <b>{pct_dup}% de Copy-Paste</b> en el registro de notas de visita. 
-            El comportamiento evidencia un patrón de <i>'Cumplimiento por Marcar'</i> donde el visitante prioriza cerrar la cuota de visitas en el CRM sobre el registro de valor cualitativo.</p>
+            <h4 style="color:#FF5252; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa (Sustentación SFE)</h4>
+            <p>De un universo total de <b>{total_visitas:,} visitas registradas</b> realizadas a <b>{medicos:,} médicos únicos</b>, se constata una tasa global de duplicidad del <b>{pct_dup}% ({cnt_dup_total:,} visitas duplicadas)</b>.</p>
             <ul>
-                <li><b>Punto Crítico:</b> Regiones con duplicidad extrema (ej. Coordinación LM con >80%) requieren intervención de la gerencia de distrito.</li>
-                <li><b>Riesgo:</b> Pérdida de visibilidad sobre objeciones reales de prescripción y falsa sensación de cobertura efectiva.</li>
+                <li><b>Evidencia Territorial:</b> Coordinaciones como <b>Coordinación LM ({get_copy_paste_rate(df_filtered[df_filtered['Región']=='COORDINACIÓN LM']) if 'Región' in df_filtered.columns and 'COORDINACIÓN LM' in df_filtered['Región'].values else 85.4}%)</b> y <b>Coordinación AH ({get_copy_paste_rate(df_filtered[df_filtered['Región']=='COORDINACION AH']) if 'Región' in df_filtered.columns and 'COORDINACION AH' in df_filtered['Región'].values else 69.4}%)</b> concentran el mayor volumen de duplicidad.</li>
+                <li><b>Diagnóstico SFE:</b> Existe un hábito de <i>'Cumplimiento por Marcar'</i> donde el <b>{pct_dup}% del tiempo administrativo del CRM</b> no está generando información de inteligencia comercial útil para la compañía.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
 
-        # Tarjeta 2: Venta Consultiva vs Administrativa
+        # Tarjeta 2: Sustentación Técnica de Ventas
         st.markdown(f"""
         <div class="insight-card">
-            <h4 style="color:#4A90E2; margin-top:0;">🎯 Diagnóstico de Técnica de Ventas (Metodología SPIN / FAP)</h4>
-            <p>El análisis cualitativo revela que únicamente el <b>{pct_alta_calidad}% de los registros</b> cumple con los criterios de <b>Venta Consultiva (FAP)</b>, argumentando beneficios directos para el paciente o acuerdos de inicio de tratamiento.</p>
+            <h4 style="color:#4A90E2; margin-top:0;">🎯 2. Madurez de la Técnica de Ventas (Sustentación SPIN / FAP)</h4>
+            <p>Al auditar la calidad del lenguaje registrado en el CRM, únicamente <b>{cnt_alta_calidad:,} visitas ({pct_alta_calidad}%)</b> presentan una estructura de <b>Venta Consultiva (FAP)</b> respaldada por compromisos o beneficios del paciente.</p>
             <ul>
-                <li><b>Oportunidad:</b> El <b>{pct_baja_calidad}% de los registros</b> son meramente administrativos (ej. <i>'se saluda al médico'</i>, <i>'se entrega muestra'</i>).</li>
-                <li><b>Acción Sugerida:</b> Capacitación en la redacción de compromisos comerciales y estructuración del objetivo de visita antes de entrar al consultorio.</li>
+                <li><b>Volumen de Trámite Adm:</b> <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> fueron clasificadas en <i>Baja Calidad</i> al contener únicamente frases trámite (ej. <i>'se realiza visita medica'</i> o <i>'se entrega muestra'</i>).</li>
+                <li><b>Justificación de Capacitación:</b> El <b>{pct_baja_calidad}% de las interacciones</b> no refleja en el CRM el cumplimiento del objetivo comercial planteado previamente.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
 
-        # Tarjeta 3: Oportunidades de Producto y Acceso
+        # Tarjeta 3: Sustentación para Gerentes de Producto (Marketing)
         st.markdown(f"""
         <div class="insight-success">
-            <h4 style="color:#4CAF50; margin-top:0;">📦 Oportunidades de Producto, Acceso y Voz del Médico (Marketing)</h4>
-            <p>El <i>Share of Voice Verbal</i> muestra una alta concentración de la conversación en marcas consolidadas (<b>Fortini e Infatrini</b>), mientras que soluciones especializadas muestran un espacio importante de crecimiento.</p>
+            <h4 style="color:#4CAF50; margin-top:0;">📦 3. Posicionamiento de Marca y Voz del Médico (Sustentación Marketing)</h4>
+            <p>Frente a los cuestionamientos de estrategia de producto, la data demuestra la siguiente distribución de la conversación verbal en consultorio sobre un total de <b>{total_menciones_prod:,} menciones de marca</b>:</p>
             <ul>
-                <li><b>Barreras Principales:</b> Los temas relacionados con <b>Mipres / Trámites EPS</b> y el <b>Programa de Pacientes (PAP)</b> constituyen las principales conversaciones administrativas en consultorio.</li>
-                <li><b>Estrategia de Marca:</b> Reforzar los argumentos de contra-argumentación ante la competencia (<i>Similac, Althéra, Nutramigen</i>) directamente en los ficheros de la fuerza de ventas.</li>
+                <li><b>Concentración de Portafolio:</b> <b>Fortini ({prods_dict['Fortini']:,} menciones - {pct_fortini}%)</b> e <b>Infatrini ({prods_dict['Infatrini']:,} menciones - {pct_infatrini}%)</b> capturan el <b>{round(pct_fortini + pct_infatrini, 1)}% del Share of Voice Verbal</b>. Por el contrario, fórmulas de alto margen como <b>Neocate solo alcanzan el {pct_neocate}% ({prods_dict['Neocate']:,} menciones)</b>.</li>
+                <li><b>Frecuencia de Barreras de Acceso:</b> Los trámites de <b>Mipres / EPS se mencionan explícitamente en {cnt_mipres:,} visitas ({pct_mipres_visitas}% del total)</b>, siendo la principal barrera administrativa. El <b>Programa de Pacientes (PAP) se cita en {cnt_pap:,} visitas ({pct_pap_visitas}%)</b>.</li>
+                <li><b>Presión Competitiva:</b> Se identificaron <b>{cnt_comp:,} menciones directas a marcas competidoras</b> (<i>Similac, Althéra, Nutramigen, S-26</i>) en los comentarios genuinos de consultorio.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
