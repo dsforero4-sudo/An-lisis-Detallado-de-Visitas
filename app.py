@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS
+# Estilos CSS Personalizados
 st.markdown("""
     <style>
     .stApp { background-color: #1A1F2C; color: #FFFFFF; }
@@ -31,16 +31,21 @@ st.markdown("""
 st.title("Pharmadvisor | E-Metrics BI Executive")
 st.caption("Panel de Inteligencia de Mercado, Auditoría SFE y Voz del Médico")
 
+# Función para calcular la Tasa Real de Copy-Paste
 def get_copy_paste_rate(df_sub):
     total = len(df_sub)
     if total == 0:
         return 0.0
+    
+    # Si una misma frase representa el 95%+ de las visitas de un grupo >= 10, es 100% plantilla
     max_freq = df_sub['Comentario_str'].value_counts().max() if 'Comentario_str' in df_sub.columns else 0
     if (max_freq / total) >= 0.95 and total >= 10:
         return 100.0
+    
     dup_cnt = df_sub.duplicated(subset=['Comentario_str']).sum() if 'Comentario_str' in df_sub.columns else 0
     return round((dup_cnt / total) * 100, 1)
 
+# 2. Carga de Archivo Excel/CSV
 uploaded_file = st.file_uploader("Cargar Reporte de Visitas (Excel / CSV)", type=["xlsx", "xls", "csv"])
 
 if uploaded_file is not None:
@@ -54,7 +59,7 @@ if uploaded_file is not None:
 
     df_clean['Comentario_str'] = df_clean['Comentario'].astype(str).str.strip() if 'Comentario' in df_clean.columns else ""
 
-    # Filtros Globales
+    # 3. Barra de Filtros Globales (Píldoras Superiores)
     col1, col2, col3 = st.columns(3)
     with col1:
         regiones = ["Todas"] + sorted([str(x) for x in df_clean['Región'].dropna().unique()]) if 'Región' in df_clean.columns else ["Todas"]
@@ -66,6 +71,7 @@ if uploaded_file is not None:
         reps = ["Todas"] + sorted([str(x) for x in df_clean['Representante'].dropna().unique()]) if 'Representante' in df_clean.columns else ["Todas"]
         sel_rep = st.selectbox("Representante (SFE)", reps)
 
+    # Filtrado dinámico
     df_filtered = df_clean.copy()
     if sel_region != "Todas":
         df_filtered = df_filtered[df_filtered['Región'] == sel_region]
@@ -74,12 +80,21 @@ if uploaded_file is not None:
     if sel_rep != "Todas":
         df_filtered = df_filtered[df_filtered['Representante'] == sel_rep]
 
+    # 4. Cálculo de Métricas Clave (Corregido)
     total_visitas = len(df_filtered)
-    medicos = df_filtered['Médicos'].nunique() if 'Médicos' in df_filtered.columns else 0
+    
+    # Identificación precisa de médicos únicos por Código de Identificación
+    if 'Cod. único Médicos' in df_filtered.columns:
+        medicos = df_filtered['Cod. único Médicos'].nunique()
+    elif 'Cod. único' in df_filtered.columns:
+        medicos = df_filtered['Cod. único'].nunique()
+    else:
+        medicos = df_filtered['Médicos'].nunique()
+
     pct_dup = get_copy_paste_rate(df_filtered)
     score_calidad = max(0, round(100 - pct_dup, 1))
 
-    # Tarjetas KPI Globales
+    # 5. Tarjetas KPI Globales
     k1, k2, k3, k4 = st.columns(4)
     k1.markdown(f'<div class="kpi-card"><div class="kpi-label">TOTAL VISITAS ÚNICAS</div><div class="kpi-value">{total_visitas:,}</div></div>', unsafe_allow_html=True)
     k2.markdown(f'<div class="kpi-card"><div class="kpi-label">MÉDICOS CONTACTADOS</div><div class="kpi-value">{medicos:,}</div></div>', unsafe_allow_html=True)
@@ -89,7 +104,7 @@ if uploaded_file is not None:
 
     st.markdown("###")
 
-    # PESTAÑAS DEDICADAS POR ROL
+    # 6. Pestañas Dedicadas por Rol
     tab_reg, tab_linea = st.tabs(["🏛️ GERENCIAS REGIONALES (SFE & Territorio)", "📦 GERENCIAS DE LÍNEA (Share of Voice & Voz del Médico)"])
 
     # --- PESTAÑA 1: GERENCIAS REGIONALES ---
@@ -127,7 +142,7 @@ if uploaded_file is not None:
                     'Línea': grp['Línea'].iloc[0] if 'Línea' in grp.columns else 'N/A',
                     'Representante': r,
                     'Visitas Totales': len(grp),
-                    'Médicos Únicos': grp['Médicos'].nunique() if 'Médicos' in grp.columns else 0,
+                    'Médicos Únicos': grp['Cod. único Médicos'].nunique() if 'Cod. único Médicos' in grp.columns else grp['Médicos'].nunique(),
                     '% Copy-Paste': get_copy_paste_rate(grp)
                 } for r, grp in df_filtered.groupby('Representante')
             ]).sort_values(by='% Copy-Paste', ascending=False)
@@ -167,10 +182,9 @@ if uploaded_file is not None:
         st.markdown("#### 💬 Módulos de Voz del Médico (Comentarios Reales de Consultorio)")
         st.caption("Filtrado automático de notas genéricas/duplicadas para analizar únicamente las observaciones genuinas reportadas en campo.")
 
-        # Obtener comentarios genuinos no duplicados por representante
+        # Obtener comentarios genuinos no duplicados
         comentarios_genuinos = df_filtered[~df_filtered.duplicated(subset=['Representante', 'Comentario_str'], keep=False)].copy()
         
-        # Selector de Búsqueda de Términos
         kw_input = st.text_input("🔍 Filtrar Comentarios por Palabra Clave (Ej: Mipres, Sabor, Aceptación, Muestra, Competencia, PAP)", "")
 
         if kw_input:
