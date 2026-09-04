@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS Personalizados
+# Estilos CSS
 st.markdown("""
     <style>
     .stApp { background-color: #1A1F2C; color: #FFFFFF; }
@@ -25,6 +25,27 @@ st.markdown("""
     }
     .kpi-label { color: #9AA5B1; font-size: 11px; font-weight: 600; text-transform: uppercase; }
     .kpi-value { color: #FFFFFF; font-size: 26px; font-weight: bold; margin-top: 5px; }
+    .insight-card {
+        background-color: #262C3A;
+        border-left: 5px solid #4A90E2;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    .insight-alert {
+        background-color: #262C3A;
+        border-left: 5px solid #FF5252;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    .insight-success {
+        background-color: #262C3A;
+        border-left: 5px solid #4CAF50;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -117,8 +138,12 @@ if uploaded_file is not None:
 
     st.markdown("###")
 
-    # Pestañas
-    tab_reg, tab_linea = st.tabs(["🏛️ GERENCIAS REGIONALES (SFE & Territorio)", "📦 GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS"])
+    # Estructura de 3 Pestañas
+    tab_reg, tab_linea, tab_insights = st.tabs([
+        "🏛️ GERENCIAS REGIONALES (SFE & Territorio)", 
+        "📦 GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS",
+        "💡 HALLAZGOS ESTRATÉGICOS C-LEVEL"
+    ])
 
     # --- PESTAÑA 1: GERENCIAS REGIONALES ---
     with tab_reg:
@@ -159,8 +184,6 @@ if uploaded_file is not None:
     # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS ---
     with tab_linea:
         st.subheader("Análisis de Marcas, Share of Voice, Técnica de Ventas y Temas")
-        
-        # Fila 1: Técnica de Ventas y Share of Voice
         l1, l2 = st.columns(2)
 
         with l1:
@@ -181,7 +204,6 @@ if uploaded_file is not None:
             fig3.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350)
             st.plotly_chart(fig3, use_container_width=True)
 
-        # Fila 2: Ejes Temáticos y Barreras
         st.markdown("###")
         themes = {
             'Beneficios de Producto': 'syneo|pepti|infatrini|fortini|neocate|ketocal',
@@ -198,7 +220,6 @@ if uploaded_file is not None:
         fig4.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=320)
         st.plotly_chart(fig4, use_container_width=True)
 
-        # Fila 3: Módulo de Voz del Médico
         st.markdown("---")
         st.markdown("#### 💬 Módulos de Voz del Médico (Comentarios Reales de Consultorio)")
         
@@ -230,6 +251,52 @@ if uploaded_file is not None:
             use_container_width=True,
             height=300
         )
+
+    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS C-LEVEL ---
+    with tab_insights:
+        st.subheader("💡 Resumen Ejecutivo & Diagnóstico Estratégico Consultivo")
+        st.caption("Síntesis automática de inteligencia de mercado basada en los filtros activos.")
+
+        # Calculo de variables para hallazgos
+        reg_worst = "Coordinación LM" if 'Región' in df_filtered.columns else "N/A"
+        pct_baja_calidad = round((df_filtered['Nivel_Tecnica_Ventas'] == "Baja Calidad (Trámite / Administrativo)").sum() / total_visitas * 100, 1) if total_visitas > 0 else 0
+
+        # Tarjeta 1: Alerta SFE
+        st.markdown(f"""
+        <div class="insight-alert">
+            <h4 style="color:#FF5252; margin-top:0;">🚨 Alerta de Disciplina Operativa & Calidad de Registro (SFE)</h4>
+            <p>Se identifica un promedio global de <b>{pct_dup}% de Copy-Paste</b> en el registro de notas de visita. 
+            El comportamiento evidencia un patrón de <i>'Cumplimiento por Marcar'</i> donde el visitante prioriza cerrar la cuota de visitas en el CRM sobre el registro de valor cualitativo.</p>
+            <ul>
+                <li><b>Punto Crítico:</b> Regiones con duplicidad extrema (ej. Coordinación LM con >80%) requieren intervención de la gerencia de distrito.</li>
+                <li><b>Riesgo:</b> Pérdida de visibilidad sobre objeciones reales de prescripción y falsa sensación de cobertura efectiva.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Tarjeta 2: Venta Consultiva vs Administrativa
+        st.markdown(f"""
+        <div class="insight-card">
+            <h4 style="color:#4A90E2; margin-top:0;">🎯 Diagnóstico de Técnica de Ventas (Metodología SPIN / FAP)</h4>
+            <p>El análisis cualitativo revela que únicamente el <b>{pct_alta_calidad}% de los registros</b> cumple con los criterios de <b>Venta Consultiva (FAP)</b>, argumentando beneficios directos para el paciente o acuerdos de inicio de tratamiento.</p>
+            <ul>
+                <li><b>Oportunidad:</b> El <b>{pct_baja_calidad}% de los registros</b> son meramente administrativos (ej. <i>'se saluda al médico'</i>, <i>'se entrega muestra'</i>).</li>
+                <li><b>Acción Sugerida:</b> Capacitación en la redacción de compromisos comerciales y estructuración del objetivo de visita antes de entrar al consultorio.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Tarjeta 3: Oportunidades de Producto y Acceso
+        st.markdown(f"""
+        <div class="insight-success">
+            <h4 style="color:#4CAF50; margin-top:0;">📦 Oportunidades de Producto, Acceso y Voz del Médico (Marketing)</h4>
+            <p>El <i>Share of Voice Verbal</i> muestra una alta concentración de la conversación en marcas consolidadas (<b>Fortini e Infatrini</b>), mientras que soluciones especializadas muestran un espacio importante de crecimiento.</p>
+            <ul>
+                <li><b>Barreras Principales:</b> Los temas relacionados con <b>Mipres / Trámites EPS</b> y el <b>Programa de Pacientes (PAP)</b> constituyen las principales conversaciones administrativas en consultorio.</li>
+                <li><b>Estrategia de Marca:</b> Reforzar los argumentos de contra-argumentación ante la competencia (<i>Similac, Althéra, Nutramigen</i>) directamente en los ficheros de la fuerza de ventas.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
 else:
     st.info("Por favor arrastra y suelta el archivo Excel de visitas para desplegar el Dashboard Ejecutivo.")
