@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS
+# Estilos CSS Personalizados
 st.markdown("""
     <style>
     .stApp { background-color: #1A1F2C; color: #FFFFFF; }
@@ -45,15 +45,10 @@ def get_copy_paste_rate(df_sub):
 # Función de Calificación de Técnica de Ventas (SPIN / FAP)
 def evaluar_tecnica_ventas(texto):
     txt = str(texto).lower()
-    
-    # Palabras clave de Venta Consultiva (Beneficios, Acuerdos, Problema/Solución)
     kw_spin = ['beneficio', 'beneficios', 'paciente', 'pacientes', 'adherencia', 'tolerancia', 
                'iniciar', 'inicios', 'compromiso', 'acepta', 'formula', 'formulacion', 
                'diferencia', 'diferenciador', 'falla de medro', 'alergia', 'reflujo', 'efectividad']
     
-    # Palabras clave meramente administrativas
-    kw_admin = ['se realiza visita', 'se saluda', 'visita de seguimiento', 'se entrega muestra', 'se deja material']
-
     score_spin = sum(1 for kw in kw_spin if kw in txt)
     
     if score_spin >= 2:
@@ -147,18 +142,33 @@ if uploaded_file is not None:
                 fig2.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350, yaxis={'autorange': 'reversed'})
                 st.plotly_chart(fig2, use_container_width=True)
 
+        st.markdown("#### Tabla de Control de la Fuerza de Ventas")
+        if 'Representante' in df_filtered.columns:
+            tabla_sfe = pd.DataFrame([
+                {
+                    'Coordinación': grp['Región'].iloc[0] if 'Región' in grp.columns else 'N/A',
+                    'Línea': grp['Línea'].iloc[0] if 'Línea' in grp.columns else 'N/A',
+                    'Representante': r,
+                    'Visitas Totales': len(grp),
+                    'Médicos Únicos': grp['Cod. único Médicos'].nunique() if 'Cod. único Médicos' in grp.columns else grp['Médicos'].nunique(),
+                    '% Copy-Paste': get_copy_paste_rate(grp)
+                } for r, grp in df_filtered.groupby('Representante')
+            ]).sort_values(by='% Copy-Paste', ascending=False)
+            st.dataframe(tabla_sfe, use_container_width=True)
+
     # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS ---
     with tab_linea:
-        st.subheader("Análisis de Técnica de Ventas (SPIN/FAP) y Mensaje Promocional")
+        st.subheader("Análisis de Marcas, Share of Voice, Técnica de Ventas y Temas")
+        
+        # Fila 1: Técnica de Ventas y Share of Voice
         l1, l2 = st.columns(2)
 
         with l1:
-            # Gráfico de Calidad de Argumentación
             calidad_df = df_filtered['Nivel_Tecnica_Ventas'].value_counts().reset_index()
             calidad_df.columns = ['Nivel de Calidad', 'Visitas']
             fig_cal = px.pie(calidad_df, names='Nivel de Calidad', values='Visitas', hole=0.4,
                              color_discrete_sequence=['#4CAF50', '#FFC107', '#FF5252'],
-                             template='plotly_dark', title='<b>Evaluación Cualitativa del Registro (SPIN / FAP)</b>')
+                             template='plotly_dark', title='<b>1. Evaluación Cualitativa del Registro (SPIN / FAP)</b>')
             fig_cal.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350)
             st.plotly_chart(fig_cal, use_container_width=True)
 
@@ -167,26 +177,50 @@ if uploaded_file is not None:
             prod_data = [{'Producto': p, 'Visitas': df_filtered['Comentario_str'].str.contains(p, case=False, na=False).sum()} for p in prods]
             prod_df = pd.DataFrame(prod_data).sort_values(by='Visitas', ascending=False)
             fig3 = px.bar(prod_df, x='Producto', y='Visitas', color='Visitas',
-                          color_continuous_scale='Blues', template='plotly_dark', title='<b>Menciones por Producto (Share of Voice)</b>')
+                          color_continuous_scale='Blues', template='plotly_dark', title='<b>2. Menciones por Producto (Share of Voice)</b>')
             fig3.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350)
             st.plotly_chart(fig3, use_container_width=True)
 
+        # Fila 2: Ejes Temáticos y Barreras
+        st.markdown("###")
+        themes = {
+            'Beneficios de Producto': 'syneo|pepti|infatrini|fortini|neocate|ketocal',
+            'Programa Pacientes (PAP)': 'pap|programa|fundacion|fundación',
+            'Trámites Mipres / EPS': 'mipres|eps|autorizacion|autorización|formulacion',
+            'Inicios / Muestras': 'inicio|inicios|muestra|muestras|probando',
+            'Competencia Mencionada': 's-26|s26|similac|nan|althera|nutramigen'
+        }
+        theme_data = [{'Eje Temático': t_name, 'Visitas': df_filtered['Comentario_str'].str.contains(t_kw, case=False, na=False).sum()} for t_name, t_kw in themes.items()]
+        theme_df = pd.DataFrame(theme_data).sort_values(by='Visitas', ascending=True)
+        fig4 = px.bar(theme_df, y='Eje Temático', x='Visitas', orientation='h',
+                      color='Visitas', color_continuous_scale='Greens', template='plotly_dark',
+                      title='<b>3. Ejes Temáticos y Barreras detectadas en Consultorio</b>')
+        fig4.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=320)
+        st.plotly_chart(fig4, use_container_width=True)
+
+        # Fila 3: Módulo de Voz del Médico
         st.markdown("---")
-        st.markdown("#### 💬 Auditoría de Comentarios y Objetivos de Visita")
+        st.markdown("#### 💬 Módulos de Voz del Médico (Comentarios Reales de Consultorio)")
         
         comentarios_genuinos = df_filtered[~df_filtered.duplicated(subset=['Representante', 'Comentario_str'], keep=False)].copy()
         
-        filtro_nivel = st.radio("Filtrar por Nivel de Calidad Comercial:", 
-                                ["Todos los Comentarios Genuinos", "Alta Calidad (Venta Consultiva / FAP)", "Baja Calidad (Trámite / Administrativo)"], horizontal=True)
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            filtro_nivel = st.selectbox("Filtrar por Nivel de Calidad Comercial:", 
+                                        ["Todos los Comentarios Genuinos", "Alta Calidad (Venta Consultiva / FAP)", "Calidad Media (Presentación de Producto)", "Baja Calidad (Trámite / Administrativo)"])
+        with c2:
+            kw_input = st.text_input("🔍 Buscar por Palabra Clave (Ej: Mipres, Sabor, Aceptación, Muestra, Competencia, PAP)", "")
 
+        comentarios_display = comentarios_genuinos.copy()
         if filtro_nivel != "Todos los Comentarios Genuinos":
-            comentarios_display = comentarios_genuinos[comentarios_genuinos['Nivel_Tecnica_Ventas'] == filtro_nivel]
-        else:
-            comentarios_display = comentarios_genuinos
+            comentarios_display = comentarios_display[comentarios_display['Nivel_Tecnica_Ventas'] == filtro_nivel]
+        if kw_input:
+            comentarios_display = comentarios_display[comentarios_display['Comentario_str'].str.contains(kw_input, case=False, na=False)]
 
         cols_vista = ['Línea', 'Especialidad Promocional', 'Representante', 'Objetivo_str', 'Comentario_str']
         cols_presentes = [c for c in cols_vista if c in comentarios_display.columns]
 
+        st.markdown(f"**Se encontraron {len(comentarios_display):,} observaciones cualitativas reales:**")
         st.dataframe(
             comentarios_display[cols_presentes].rename(columns={
                 'Especialidad Promocional': 'Especialidad Médico',
