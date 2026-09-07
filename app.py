@@ -233,11 +233,22 @@ if uploaded_file is not None:
                 cross_df = df_filtered.groupby([doc_id_col, 'Cat_Clean'])['Pareto_Clean'].first().reset_index()
                 cross_summary = cross_df.groupby(['Cat_Clean', 'Pareto_Clean']).size().reset_index(name='Médicos Únicos')
                 
+                # OPCIÓN 1: Barras Apiladas al 100% (% Alignment)
                 fig_cross = px.bar(cross_summary, x='Cat_Clean', y='Médicos Únicos', color='Pareto_Clean',
-                                   barmode='group', template='plotly_dark',
-                                   title='<b>4. Matriz de Alignment: Ubicación de Médicos TOP en Instituciones Pareto</b>',
-                                   color_discrete_map={'Institución Pareto': '#4CAF50', 'Institución No Pareto': '#FFC107'})
-                fig_cross.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330, xaxis_title="")
+                                   template='plotly_dark',
+                                   title='<b>4. Matriz de Alignment: % de Ubicación Institucional por Categoría</b>',
+                                   color_discrete_map={'Institución Pareto': '#4CAF50', 'Institución No Pareto': '#FFC107'},
+                                   text_auto=True)
+                
+                fig_cross.update_layout(
+                    barnorm='percent',  # Convierte la vista a 100% apilado
+                    paper_bgcolor='#1A1F2C', 
+                    plot_bgcolor='#262C3A', 
+                    height=330, 
+                    xaxis_title="",
+                    yaxis_title="% de Médicos Únicos",
+                    yaxis=dict(ticksuffix="%")
+                )
                 st.plotly_chart(fig_cross, use_container_width=True)
 
         st.markdown("#### Tabla de Control de la Fuerza de Ventas")
