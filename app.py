@@ -156,34 +156,59 @@ if uploaded_file is not None:
     col_cat = 'Categoría' if 'Categoría' in df_clean.columns else ('Categoria' if 'Categoria' in df_clean.columns else None)
     col_pareto = [c for c in df_clean.columns if 'pareto' in c.lower()]
     col_pareto_name = col_pareto[0] if col_pareto else None
+    
+    # Identificar columna de Ciclo
+    col_ciclo = [c for c in df_clean.columns if 'ciclo' in c.lower()]
+    col_ciclo_name = col_ciclo[0] if col_ciclo else None
 
     df_clean['Cat_Clean'] = df_clean[col_cat].apply(normalizar_categoria) if col_cat else 'Médico Estándar / Sin Cat.'
     df_clean['Pareto_Clean'] = df_clean[col_pareto_name].apply(normalizar_pareto) if col_pareto_name else 'Institución No Pareto'
     df_clean['Nivel_Tecnica_Ventas'] = df_clean['Comentario_str'].apply(evaluar_tecnica_ventas)
 
-    # BARRA DE FILTROS GLOBALES ESTILO E-METRICS
-    c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.2, 1.2, 1.2, 1, 1])
+    # BARRA DE FILTROS GLOBALES DINÁMICOS EN CASCADA (MULTISELECT)
+    df_step = df_clean.copy()
+
+    # 1. Filtro Ciclo
+    c_f0, c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1, 1.2, 1.2, 1.2, 1, 0.8])
+    
+    with c_f0:
+        if col_ciclo_name:
+            ciclos_opt = sorted([str(x) for x in df_step[col_ciclo_name].dropna().unique()])
+            sel_ciclo = st.multiselect("Ciclo", ciclos_opt)
+            if sel_ciclo:
+                df_step = df_step[df_step[col_ciclo_name].astype(str).isin(sel_ciclo)]
+
     with c_f1:
-        regiones = ["Todas"] + sorted([str(x) for x in df_clean['Región'].dropna().unique()]) if 'Región' in df_clean.columns else ["Todas"]
-        sel_region = st.selectbox("Coordinación Regional", regiones)
+        reg_opt = sorted([str(x) for x in df_step['Región'].dropna().unique()]) if 'Región' in df_step.columns else []
+        sel_region = st.multiselect("Coordinación Regional", reg_opt)
+        if sel_region and 'Región' in df_step.columns:
+            df_step = df_step[df_step['Región'].astype(str).isin(sel_region)]
+
     with c_f2:
-        lineas = ["Todas"] + sorted([str(x) for x in df_clean['Línea'].dropna().unique()]) if 'Línea' in df_clean.columns else ["Todas"]
-        sel_linea = st.selectbox("Línea de Producto", lineas)
+        lin_opt = sorted([str(x) for x in df_step['Línea'].dropna().unique()]) if 'Línea' in df_step.columns else []
+        sel_linea = st.multiselect("Línea de Producto", lin_opt)
+        if sel_linea and 'Línea' in df_step.columns:
+            df_step = df_step[df_step['Línea'].astype(str).isin(sel_linea)]
+
     with c_f3:
-        reps = ["Todas"] + sorted([str(x) for x in df_clean['Representante'].dropna().unique()]) if 'Representante' in df_clean.columns else ["Todas"]
-        sel_rep = st.selectbox("Representante (SFE)", reps)
+        rep_opt = sorted([str(x) for x in df_step['Representante'].dropna().unique()]) if 'Representante' in df_step.columns else []
+        sel_rep = st.multiselect("Representante (SFE)", rep_opt)
+        if sel_rep and 'Representante' in df_step.columns:
+            df_step = df_step[df_step['Representante'].astype(str).isin(sel_rep)]
+
     with c_f4:
-        sel_cat = st.selectbox("Categoría Médico", ["Todas", "Médico TOP", "Médico Estándar / Sin Cat."])
+        cat_opt = sorted([str(x) for x in df_step['Cat_Clean'].dropna().unique()])
+        sel_cat = st.multiselect("Categoría Médico", cat_opt)
+        if sel_cat:
+            df_step = df_step[df_step['Cat_Clean'].astype(str).isin(sel_cat)]
+
     with c_f5:
         st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
         only_pareto = st.checkbox("Solo Cuentas Pareto 🏥", value=False)
+        if only_pareto:
+            df_step = df_step[df_step['Pareto_Clean'] == 'Institución Pareto']
 
-    df_filtered = df_clean.copy()
-    if sel_region != "Todas": df_filtered = df_filtered[df_filtered['Región'] == sel_region]
-    if sel_linea != "Todas": df_filtered = df_filtered[df_filtered['Línea'] == sel_linea]
-    if sel_rep != "Todas": df_filtered = df_filtered[df_filtered['Representante'] == sel_rep]
-    if sel_cat != "Todas": df_filtered = df_filtered[df_filtered['Cat_Clean'] == sel_cat]
-    if only_pareto: df_filtered = df_filtered[df_filtered['Pareto_Clean'] == 'Institución Pareto']
+    df_filtered = df_step.copy()
 
     total_visitas = len(df_filtered)
     doc_id_col = 'Cod. único Médicos' if 'Cod. único Médicos' in df_filtered.columns else ('Cod. único' if 'Cod. único' in df_filtered.columns else 'Médicos')
@@ -320,7 +345,7 @@ if uploaded_file is not None:
             ]).sort_values(by='% Copy-Paste', ascending=False)
             st.dataframe(tabla_sfe, use_container_width=True)
 
-    # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS (COLORES SUAVES Y SEMÁFORO) ---
+    # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS ---
     with tab_linea:
         st.subheader("Análisis de Marcas, Share of Voice, Técnica de Ventas y Temas")
         l1, l2 = st.columns(2)
@@ -329,10 +354,9 @@ if uploaded_file is not None:
             calidad_df = df_filtered['Nivel_Tecnica_Ventas'].value_counts().reset_index()
             calidad_df.columns = ['Nivel de Calidad', 'Visitas']
             
-            # Paleta Semáforo Mapeada Explícitamente con tonos suaves
             color_semaforo_map = {
                 'Alta Calidad (Venta Consultiva / FAP)': '#4CAF50',      # Verde suave
-                'Calidad Media (Presentación de Producto)': '#FFB300',   # Ámbar / Amarillo
+                'Calidad Media (Presentación de Producto)': '#FFB300',   # Ámbar
                 'Baja Calidad (Trámite / Administrativo)': '#E53935'      # Rojo suave
             }
 
@@ -354,7 +378,6 @@ if uploaded_file is not None:
             prod_data = [{'Producto': p, 'Visitas': df_filtered['Comentario_str'].str.contains(p, case=False, na=False).sum()} for p in prods]
             prod_df = pd.DataFrame(prod_data).sort_values(by='Visitas', ascending=False)
             
-            # Escala de tonos azules suavizados
             fig3 = px.bar(
                 prod_df, 
                 x='Producto', 
@@ -378,7 +401,6 @@ if uploaded_file is not None:
         theme_data = [{'Eje Temático': t_name, 'Visitas': df_filtered['Comentario_str'].str.contains(t_kw, case=False, na=False).sum()} for t_name, t_kw in themes.items()]
         theme_df = pd.DataFrame(theme_data).sort_values(by='Visitas', ascending=True)
         
-        # Escala de tonos suaves azul / cian pastel
         fig4 = px.bar(
             theme_df, 
             y='Eje Temático', 
