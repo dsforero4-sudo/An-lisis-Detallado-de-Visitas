@@ -79,6 +79,17 @@ def evaluar_tecnica_ventas(texto):
     else:
         return "Baja Calidad (Trámite / Administrativo)"
 
+# Función segura para clasificar Categoría TOP vs Estándar
+def normalizar_categoria(val):
+    if pd.isna(val):
+        return 'Médico Estándar / Sin Cat.'
+    val_str = str(val).strip().upper()
+    if val_str in ['NAN', 'NONE', '', 'NULL', 'NONE']:
+        return 'Médico Estándar / Sin Cat.'
+    if 'TOP' in val_str:
+        return 'Médico TOP'
+    return 'Médico Estándar / Sin Cat.'
+
 uploaded_file = st.file_uploader("Cargar Reporte de Visitas (Excel / CSV)", type=["xlsx", "xls", "csv"])
 
 if uploaded_file is not None:
@@ -97,11 +108,9 @@ if uploaded_file is not None:
     col_pareto = [c for c in df_clean.columns if 'pareto' in c.lower()]
     col_pareto_name = col_pareto[0] if col_pareto else None
 
-    # Normalización de Categoría (TOP vs Estándar)
+    # Normalización Segura de Categoría
     if col_cat:
-        df_clean['Cat_Clean'] = df_clean[col_cat].astype(str).apply(
-            lambda x: 'Médico TOP' if any(k in x.upper() for k in ['TOP', 'A', '1']) else 'Médico Estándar / Sin Cat.'
-        )
+        df_clean['Cat_Clean'] = df_clean[col_cat].apply(normalizar_categoria)
     else:
         df_clean['Cat_Clean'] = 'Médico Estándar / Sin Cat.'
 
@@ -178,7 +187,6 @@ if uploaded_file is not None:
     with tab_reg:
         st.subheader("Auditoría Territorial y Alignment: Médicos TOP vs. Cuentas Pareto")
         
-        # Fila 1: Copy Paste por Región y Top Reps
         r1, r2 = st.columns(2)
         with r1:
             if 'Región' in df_filtered.columns and total_visitas > 0:
@@ -198,13 +206,11 @@ if uploaded_file is not None:
                 fig2.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330, yaxis={'autorange': 'reversed'})
                 st.plotly_chart(fig2, use_container_width=True)
 
-        # Fila 2: Análisis Cruzado Médicos TOP vs. Institución Pareto
         st.markdown("###")
         p1, p2 = st.columns(2)
         
         with p1:
             if total_visitas > 0:
-                # Proporción de Médicos Únicos TOP vs Estándar
                 doc_cat_df = df_filtered.groupby(doc_id_col)['Cat_Clean'].first().value_counts().reset_index()
                 doc_cat_df.columns = ['Categoría', 'Médicos Únicos']
                 fig_cat_pie = px.pie(doc_cat_df, names='Categoría', values='Médicos Únicos', hole=0.4,
@@ -215,7 +221,6 @@ if uploaded_file is not None:
 
         with p2:
             if total_visitas > 0:
-                # Matriz Cruzada: Categoría vs Tipo de Institución
                 cross_df = df_filtered.groupby([doc_id_col, 'Cat_Clean'])['Pareto_Clean'].first().reset_index()
                 cross_summary = cross_df.groupby(['Cat_Clean', 'Pareto_Clean']).size().reset_index(name='Médicos Únicos')
                 
@@ -226,7 +231,6 @@ if uploaded_file is not None:
                 fig_cross.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330, xaxis_title="")
                 st.plotly_chart(fig_cross, use_container_width=True)
 
-        # Fila 3: Tabla de Control SFE
         st.markdown("#### Tabla de Control de la Fuerza de Ventas")
         if 'Representante' in df_filtered.columns:
             tabla_sfe = pd.DataFrame([
@@ -321,15 +325,12 @@ if uploaded_file is not None:
         st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa (C-Level)")
         st.caption("Argumentación basada en métricas exactas, Targeting de Médicos TOP y Cuentas Pareto.")
 
-        # Conteo de Médicos TOP vs Estándar
         docs_top = df_filtered[df_filtered['Cat_Clean']=='Médico TOP'][doc_id_col].nunique()
         pct_top = round((docs_top / medicos) * 100, 1) if medicos > 0 else 0
 
-        # Conteo de Médicos TOP en Pareto
         docs_top_pareto = df_filtered[(df_filtered['Cat_Clean']=='Médico TOP') & (df_filtered['Pareto_Clean']=='Institución Pareto')][doc_id_col].nunique()
         pct_top_in_pareto = round((docs_top_pareto / docs_top) * 100, 1) if docs_top > 0 else 0
 
-        # Tarjeta 1: Sustentación SFE y Targeting TOP
         st.markdown(f"""
         <div class="insight-alert">
             <h4 style="color:#FF5252; margin-top:0;">🚨 1. Evaluación de Criterio de Selección de Médicos TOP (Targeting SFE)</h4>
@@ -341,7 +342,6 @@ if uploaded_file is not None:
         </div>
         """, unsafe_allow_html=True)
 
-        # Tarjeta 2: Sustentación Técnica de Ventas
         st.markdown(f"""
         <div class="insight-card">
             <h4 style="color:#4A90E2; margin-top:0;">🎯 2. Madurez de la Técnica de Ventas (Sustentación SPIN / FAP)</h4>
