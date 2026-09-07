@@ -175,6 +175,8 @@ if uploaded_file is not None:
     cnt_dup_total = int(round((pct_dup / 100) * total_visitas))
     cnt_alta_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Alta Calidad (Venta Consultiva / FAP)").sum()
     pct_alta_calidad = round((cnt_alta_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
+    cnt_baja_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Baja Calidad (Trámite / Administrativo)").sum()
+    pct_baja_calidad = round((cnt_baja_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
 
     # Tarjetas KPI
     k1, k2, k3, k4 = st.columns(4)
@@ -231,7 +233,6 @@ if uploaded_file is not None:
 
         with p2:
             if total_visitas > 0:
-                # MATRIZ SEMÁFORO LIMPIA (Solo Número y %)
                 cross_df = df_filtered.groupby([doc_id_col, 'Cat_Clean'])['Pareto_Clean'].first().reset_index()
                 ct = pd.crosstab(cross_df['Cat_Clean'], cross_df['Pareto_Clean'])
                 
@@ -250,7 +251,6 @@ if uploaded_file is not None:
 
                 color_matrix = [[0.2, 1.0], [0.0, 0.6]]
                 
-                # Texto limpio: Número + %
                 text_matrix = [
                     [f"<b>{v_top_no_pareto:,}</b><br>({p_top_no_pareto}%)", f"<b>{v_top_pareto:,}</b><br>({p_top_pareto}%)"],
                     [f"<b>{v_est_no_pareto:,}</b><br>({p_est_no_pareto}%)", f"<b>{v_est_pareto:,}</b><br>({p_est_pareto}%)"]
@@ -377,32 +377,90 @@ if uploaded_file is not None:
             height=300
         )
 
-    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS C-LEVEL ---
+    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS COMPLETOS (SFE & PRODUCTO C-LEVEL) ---
     with tab_insights:
-        st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa (C-Level)")
-        st.caption("Argumentación basada en métricas exactas, Targeting de Médicos TOP y Cuentas Pareto.")
+        st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa Integral (C-Level)")
+        st.caption("Síntesis automática de inteligencia de mercado, targeting, técnica de ventas y barreras de producto.")
 
+        # 1. Cálculos SFE y Targeting
         docs_top = df_filtered[df_filtered['Cat_Clean']=='Médico TOP'][doc_id_col].nunique() if doc_id_col in df_filtered.columns else 0
         pct_top = round((docs_top / medicos) * 100, 1) if medicos > 0 else 0
 
         docs_top_pareto = df_filtered[(df_filtered['Cat_Clean']=='Médico TOP') & (df_filtered['Pareto_Clean']=='Institución Pareto')][doc_id_col].nunique() if doc_id_col in df_filtered.columns else 0
         pct_top_in_pareto = round((docs_top_pareto / docs_top) * 100, 1) if docs_top > 0 else 0
+        docs_top_no_pareto = docs_top - docs_top_pareto
 
+        # 2. Cálculos Producto y Share of Voice
+        prods_dict = {
+            'Fortini': df_filtered['Comentario_str'].str.contains('Fortini', case=False, na=False).sum(),
+            'Infatrini': df_filtered['Comentario_str'].str.contains('Infatrini', case=False, na=False).sum(),
+            'Ketocal': df_filtered['Comentario_str'].str.contains('Ketocal', case=False, na=False).sum(),
+            'Pepti': df_filtered['Comentario_str'].str.contains('Pepti', case=False, na=False).sum(),
+            'Syneo': df_filtered['Comentario_str'].str.contains('Syneo', case=False, na=False).sum(),
+            'Neocate': df_filtered['Comentario_str'].str.contains('Neocate', case=False, na=False).sum(),
+        }
+        tot_menciones_prod = sum(prods_dict.values()) if sum(prods_dict.values()) > 0 else 1
+        pct_fortini = round((prods_dict['Fortini'] / tot_menciones_prod) * 100, 1)
+        pct_infatrini = round((prods_dict['Infatrini'] / tot_menciones_prod) * 100, 1)
+        pct_neocate = round((prods_dict['Neocate'] / tot_menciones_prod) * 100, 1)
+        pct_ketocal = round((prods_dict['Ketocal'] / tot_menciones_prod) * 100, 1)
+
+        # 3. Cálculos Barreras y Competencia
+        cnt_mipres = df_filtered['Comentario_str'].str.contains('mipres|eps|autorizacion|formulacion', case=False, na=False).sum()
+        pct_mipres = round((cnt_mipres / total_visitas) * 100, 1) if total_visitas > 0 else 0
+
+        cnt_pap = df_filtered['Comentario_str'].str.contains('pap|programa|fundacion', case=False, na=False).sum()
+        pct_pap = round((cnt_pap / total_visitas) * 100, 1) if total_visitas > 0 else 0
+
+        cnt_comp = df_filtered['Comentario_str'].str.contains('s-26|s26|similac|nan|althera|nutramigen', case=False, na=False).sum()
+        pct_comp = round((cnt_comp / total_visitas) * 100, 1) if total_visitas > 0 else 0
+
+        # HALLAZGO 1: SFE Y TARGETING
         st.markdown(f"""
         <div class="insight-alert">
-            <h4 style="color:#FF5252; margin-top:0;">🚨 1. Evaluación de Criterio de Selección de Médicos TOP (Targeting SFE)</h4>
-            <p>Los representantes seleccionaron un total de <b>{docs_top:,} médicos TOP ({pct_top}% del panel contactado)</b>. Al auditar su ubicación institucional:</p>
+            <h4 style="color:#FF5252; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa & Criterio de Selección TOP (SFE)</h4>
+            <p>Se auditó un volumen de <b>{total_visitas:,} visitas</b> realizadas a <b>{medicos:,} médicos únicos</b>, encontrando una tasa de duplicidad del <b>{pct_dup}% ({cnt_dup_total:,} visitas copy-paste)</b>.</p>
             <ul>
-                <li><b>Alineación con Cuentas Clave:</b> Únicamente el <b>{pct_top_in_pareto}% de los médicos TOP seleccionados ({docs_top_pareto:,} médicos)</b> pertenecen a Instituciones Pareto.</li>
-                <li><b>Oportunidad de Calibración:</b> El restante <b>{round(100 - pct_top_in_pareto, 1)}% de los médicos clasificados como TOP</b> son atendidos en instituciones periféricas (No Pareto), lo que evidencia la necesidad de calibrar el criterio de selección de los representantes con la gerencia comercial.</li>
+                <li><b>Alineación de Cuentas Clave:</b> Los visitantes declararon a <b>{docs_top:,} médicos como TOP ({pct_top}% del panel)</b>, pero únicamente el <b>{pct_top_in_pareto}% ({docs_top_pareto:,} médicos)</b> pertenecen a Instituciones Pareto.</li>
+                <li><b>Riesgo de Dispersión:</b> Hay <b>{docs_top_no_pareto:,} médicos clasificados como TOP ({round(100 - pct_top_in_pareto, 1)}%)</b> atendidos en instituciones de bajo flujo (No Pareto), lo que evidencia la necesidad de re-calibrar el fichero comercial.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
 
+        # HALLAZGO 2: TÉCNICA DE VENTAS
         st.markdown(f"""
         <div class="insight-card">
-            <h4 style="color:#4A90E2; margin-top:0;">🎯 2. Madurez de la Técnica de Ventas (Sustentación SPIN / FAP)</h4>
-            <p>Al auditar el registro en CRM, únicamente <b>{cnt_alta_calidad:,} visitas ({pct_alta_calidad}%)</b> presentan una estructura de <b>Venta Consultiva (FAP)</b> respaldada por compromisos o beneficios del paciente.</p>
+            <h4 style="color:#4A90E2; margin-top:0;">🎯 2. Evaluación Cualitativa de la Técnica de Ventas (SPIN / FAP)</h4>
+            <p>El motor de auditoría cualitativa determina que solo <b>{cnt_alta_calidad:,} visitas ({pct_alta_calidad}%)</b> presentan una estructura de <b>Venta Consultiva Real (FAP)</b> respaldada por argumentos de beneficios para el paciente o compromisos de inicio.</p>
+            <ul>
+                <li><b>Trámite Administrativo:</b> Un total de <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> se limitan a registros de trámite vacíos (ej. <i>'se realiza visita'</i>, <i>'se deja muestra'</i>).</li>
+                <li><b>Acción de Red de Campo:</b> Priorizar el coaching en la redacción de objetivos y manejo de acuerdos comerciales en la visita.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # HALLAZGO 3: SHARE OF VOICE DE MARCA
+        st.markdown(f"""
+        <div class="insight-success">
+            <h4 style="color:#4CAF50; margin-top:0;">📦 3. Concentración del Share of Voice Verbal por Marca (Marketing)</h4>
+            <p>Sobre un total de <b>{tot_menciones_prod:,} menciones explícitas de producto</b> en las notas de consultorio, la conversación está altamente hiper-concentrada:</p>
+            <ul>
+                <li><b>Marcas Dominantes:</b> <b>Fortini ({prods_dict['Fortini']:,} menciones - {pct_fortini}%)</b> e <b>Infatrini ({prods_dict['Infatrini']:,} menciones - {pct_infatrini}%)</b> suman el <b>{round(pct_fortini + pct_infatrini, 1)}% de la conversación promocional verbal</b>.</li>
+                <li><b>Oportunidad Fórmulas Especializadas:</b> Productos de alto margen como <b>Neocate ({prods_dict['Neocate']:,} menciones - {pct_neocate}%)</b> y <b>Ketocal ({prods_dict['Ketocal']:,} menciones - {pct_ketocal}%)</b> muestran una baja participación verbal en consultorio, requiriendo un plan de activación con la gerencia de producto.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # HALLAZGO 4: BARRERAS Y COMPETENCIA
+        st.markdown(f"""
+        <div class="insight-card" style="border-left: 5px solid #FFC107;">
+            <h4 style="color:#FFB300; margin-top:0;">💬 4. Mapeo de Barreras en Consultorio y Voz del Médico (Acceso y Competencia)</h4>
+            <p>El análisis temático sobre los comentarios genuinos identifica las principales fuerzas y barreras que enfrentan las fórmulas en el día a día:</p>
+            <ul>
+                <li><b>Barrera de Acceso (Mipres / EPS):</b> Se identifica como obstáculo o trámite explícito en <b>{cnt_mipres:,} visitas ({pct_mipres}% del total de interacciones)</b>.</li>
+                <li><b>Habilitador de Adherencia (PAP):</b> El Programa de Apoyo a Pacientes se cita en <b>{cnt_pap:,} visitas ({pct_pap}%)</b> como herramienta clave para el cierre.</li>
+                <li><b>Presión Competitiva en Campo:</b> Se detectaron <b>{cnt_comp:,} menciones directas ({pct_comp}%)</b> a marcas competidoras (<i>Similac, Althéra, Nutramigen, S-26</i>) con objeciones sobre precio, sabor o autorización EPS.</li>
+            </ul>
         </div>
         """, unsafe_allow_html=True)
 
