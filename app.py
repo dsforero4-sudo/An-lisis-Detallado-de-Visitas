@@ -320,7 +320,7 @@ if uploaded_file is not None:
             ]).sort_values(by='% Copy-Paste', ascending=False)
             st.dataframe(tabla_sfe, use_container_width=True)
 
-    # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS ---
+    # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS (COLORES SUAVES Y SEMÁFORO) ---
     with tab_linea:
         st.subheader("Análisis de Marcas, Share of Voice, Técnica de Ventas y Temas")
         l1, l2 = st.columns(2)
@@ -328,9 +328,24 @@ if uploaded_file is not None:
         with l1:
             calidad_df = df_filtered['Nivel_Tecnica_Ventas'].value_counts().reset_index()
             calidad_df.columns = ['Nivel de Calidad', 'Visitas']
-            fig_cal = px.pie(calidad_df, names='Nivel de Calidad', values='Visitas', hole=0.5,
-                             color_discrete_sequence=['#A3FF00', '#FFB300', '#E6007E'],
-                             template='plotly_dark', title='<b>1. Evaluación Cualitativa del Registro (SPIN / FAP)</b>')
+            
+            # Paleta Semáforo Mapeada Explícitamente con tonos suaves
+            color_semaforo_map = {
+                'Alta Calidad (Venta Consultiva / FAP)': '#4CAF50',      # Verde suave
+                'Calidad Media (Presentación de Producto)': '#FFB300',   # Ámbar / Amarillo
+                'Baja Calidad (Trámite / Administrativo)': '#E53935'      # Rojo suave
+            }
+
+            fig_cal = px.pie(
+                calidad_df, 
+                names='Nivel de Calidad', 
+                values='Visitas', 
+                hole=0.5,
+                color='Nivel de Calidad',
+                color_discrete_map=color_semaforo_map,
+                template='plotly_dark', 
+                title='<b>1. Evaluación Cualitativa del Registro (SPIN / FAP)</b>'
+            )
             fig_cal.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=350)
             st.plotly_chart(fig_cal, use_container_width=True)
 
@@ -338,8 +353,17 @@ if uploaded_file is not None:
             prods = ['Fortini', 'Infatrini', 'Ketocal', 'Pepti', 'Syneo', 'Neocate', 'Anamix']
             prod_data = [{'Producto': p, 'Visitas': df_filtered['Comentario_str'].str.contains(p, case=False, na=False).sum()} for p in prods]
             prod_df = pd.DataFrame(prod_data).sort_values(by='Visitas', ascending=False)
-            fig3 = px.bar(prod_df, x='Producto', y='Visitas', color='Visitas',
-                          color_continuous_scale=['#0088FF', '#A3FF00'], template='plotly_dark', title='<b>2. Menciones por Producto (Share of Voice)</b>')
+            
+            # Escala de tonos azules suavizados
+            fig3 = px.bar(
+                prod_df, 
+                x='Producto', 
+                y='Visitas', 
+                color='Visitas',
+                color_continuous_scale=['#263238', '#0088FF', '#4DD0E1'], 
+                template='plotly_dark', 
+                title='<b>2. Menciones por Producto (Share of Voice)</b>'
+            )
             fig3.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=350)
             st.plotly_chart(fig3, use_container_width=True)
 
@@ -353,9 +377,18 @@ if uploaded_file is not None:
         }
         theme_data = [{'Eje Temático': t_name, 'Visitas': df_filtered['Comentario_str'].str.contains(t_kw, case=False, na=False).sum()} for t_name, t_kw in themes.items()]
         theme_df = pd.DataFrame(theme_data).sort_values(by='Visitas', ascending=True)
-        fig4 = px.bar(theme_df, y='Eje Temático', x='Visitas', orientation='h',
-                      color='Visitas', color_continuous_scale=['#0088FF', '#A3FF00'], template='plotly_dark',
-                      title='<b>3. Ejes Temáticos y Barreras detectadas en Consultorio</b>')
+        
+        # Escala de tonos suaves azul / cian pastel
+        fig4 = px.bar(
+            theme_df, 
+            y='Eje Temático', 
+            x='Visitas', 
+            orientation='h',
+            color='Visitas', 
+            color_continuous_scale=['#263238', '#4DD0E1'], 
+            template='plotly_dark',
+            title='<b>3. Ejes Temáticos y Barreras detectadas en Consultorio</b>'
+        )
         fig4.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=320)
         st.plotly_chart(fig4, use_container_width=True)
 
