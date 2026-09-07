@@ -13,45 +13,95 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS
+# Estilos CSS idénticos al Dashboard Pharmadvisor / E Metrics BI
 st.markdown("""
     <style>
-    .stApp { background-color: #1A1F2C; color: #FFFFFF; }
-    .kpi-card {
-        background-color: #262C3A;
-        border-radius: 10px;
-        padding: 15px;
-        text-align: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    /* Fondo General Azul Pizarra E Metrics BI */
+    .stApp { 
+        background-color: #2D3346; 
+        color: #FFFFFF; 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .kpi-label { color: #9AA5B1; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-    .kpi-value { color: #FFFFFF; font-size: 26px; font-weight: bold; margin-top: 5px; }
-    .insight-card {
-        background-color: #262C3A;
-        border-left: 5px solid #4A90E2;
-        border-radius: 8px;
-        padding: 18px;
+    
+    /* Header Principal */
+    .ph-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         margin-bottom: 20px;
+    }
+    .ph-title {
+        color: #E6007E; /* Magenta Pharmadvisor */
+        font-size: 32px;
+        font-weight: bold;
+        margin: 0;
+    }
+    
+    /* Tarjetas KPI al estilo E Metrics */
+    .kpi-card {
+        background-color: #1C202C;
+        border-radius: 12px;
+        padding: 18px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .kpi-label { 
+        color: #9AA5B1; 
+        font-size: 11px; 
+        font-weight: 700; 
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .kpi-value { 
+        color: #FFFFFF; 
+        font-size: 30px; 
+        font-weight: bold; 
+        margin-top: 5px; 
+    }
+    
+    /* Tarjetas de Hallazgos C-Level */
+    .insight-card {
+        background-color: #1C202C;
+        border-left: 5px solid #0088FF;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
     .insight-alert {
-        background-color: #262C3A;
-        border-left: 5px solid #FF5252;
-        border-radius: 8px;
-        padding: 18px;
+        background-color: #1C202C;
+        border-left: 5px solid #E6007E;
+        border-radius: 10px;
+        padding: 20px;
         margin-bottom: 20px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
     .insight-success {
-        background-color: #262C3A;
-        border-left: 5px solid #4CAF50;
-        border-radius: 8px;
-        padding: 18px;
+        background-color: #1C202C;
+        border-left: 5px solid #A3FF00;
+        border-radius: 10px;
+        padding: 20px;
         margin-bottom: 20px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("Pharmadvisor | E-Metrics BI Executive")
-st.caption("Panel de Inteligencia de Mercado, Alignment SFE, Cuentas Pareto y Técnica de Ventas (SPIN / FAP)")
+# Encabezado visual Pharmadvisor
+st.markdown("""
+    <div class="ph-header">
+        <div>
+            <h1 class="ph-title">E Metrics BI Executive</h1>
+            <span style="color: #9AA5B1; font-size: 13px;">Servicio CRM y de Productividad para su negocio farmacéutico</span>
+        </div>
+        <div style="text-align: right;">
+            <span style="color: #E6007E; font-weight: bold; font-size: 20px;">Pharm<span style="color: #FFFFFF;">ADVISOR</span></span>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 # Función de Copy-Paste
 def get_copy_paste_rate(df_sub):
@@ -64,15 +114,13 @@ def get_copy_paste_rate(df_sub):
     dup_cnt = df_sub.duplicated(subset=['Comentario_str']).sum() if 'Comentario_str' in df_sub.columns else 0
     return round((dup_cnt / total) * 100, 1)
 
-# Función de Calificación de Técnica de Ventas (SPIN / FAP)
+# Función de Calificación SPIN / FAP
 def evaluar_tecnica_ventas(texto):
     txt = str(texto).lower()
     kw_spin = ['beneficio', 'beneficios', 'paciente', 'pacientes', 'adherencia', 'tolerancia', 
                'iniciar', 'inicios', 'compromiso', 'acepta', 'formula', 'formulacion', 
                'diferencia', 'diferenciador', 'falla de medro', 'alergia', 'reflujo', 'efectividad']
-    
     score_spin = sum(1 for kw in kw_spin if kw in txt)
-    
     if score_spin >= 2:
         return "Alta Calidad (Venta Consultiva / FAP)"
     elif score_spin == 1:
@@ -80,26 +128,18 @@ def evaluar_tecnica_ventas(texto):
     else:
         return "Baja Calidad (Trámite / Administrativo)"
 
-# Función segura para clasificar Categoría TOP vs Estándar
 def normalizar_categoria(val):
-    if pd.isna(val):
-        return 'Médico Estándar / Sin Cat.'
+    if pd.isna(val): return 'Médico Estándar / Sin Cat.'
     val_str = str(val).strip().upper()
-    if val_str in ['NAN', 'NONE', '', 'NULL']:
-        return 'Médico Estándar / Sin Cat.'
-    if 'TOP' in val_str:
-        return 'Médico TOP'
+    if val_str in ['NAN', 'NONE', '', 'NULL']: return 'Médico Estándar / Sin Cat.'
+    if 'TOP' in val_str: return 'Médico TOP'
     return 'Médico Estándar / Sin Cat.'
 
-# Función segura para clasificar Institución Pareto
 def normalizar_pareto(val):
-    if pd.isna(val):
-        return 'Institución No Pareto'
+    if pd.isna(val): return 'Institución No Pareto'
     val_str = str(val).strip().upper()
-    if val_str in ['NAN', 'NONE', '', 'NULL', 'NO', 'FALSE', '0']:
-        return 'Institución No Pareto'
-    if any(k in val_str for k in ['SI', 'SÍ', 'PARETO', '1', 'TRUE']):
-        return 'Institución Pareto'
+    if val_str in ['NAN', 'NONE', '', 'NULL', 'NO', 'FALSE', '0']: return 'Institución No Pareto'
+    if any(k in val_str for k in ['SI', 'SÍ', 'PARETO', '1', 'TRUE']): return 'Institución Pareto'
     return 'Institución No Pareto'
 
 uploaded_file = st.file_uploader("Cargar Reporte de Visitas (Excel / CSV)", type=["xlsx", "xls", "csv"])
@@ -108,10 +148,7 @@ if uploaded_file is not None:
     df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
     df.columns = [col[1] if isinstance(col, tuple) else col for col in df.columns]
 
-    if 'Cod. visita' in df.columns:
-        df_clean = df.drop_duplicates(subset=['Cod. visita']).copy()
-    else:
-        df_clean = df.copy()
+    df_clean = df.drop_duplicates(subset=['Cod. visita']).copy() if 'Cod. visita' in df.columns else df.copy()
 
     df_clean['Comentario_str'] = df_clean['Comentario'].astype(str).str.strip() if 'Comentario' in df_clean.columns else ""
     df_clean['Objetivo_str'] = df_clean['Objetivo'].astype(str).str.strip() if 'Objetivo' in df_clean.columns else ""
@@ -120,24 +157,12 @@ if uploaded_file is not None:
     col_pareto = [c for c in df_clean.columns if 'pareto' in c.lower()]
     col_pareto_name = col_pareto[0] if col_pareto else None
 
-    # Normalización Segura de Categoría
-    if col_cat:
-        df_clean['Cat_Clean'] = df_clean[col_cat].apply(normalizar_categoria)
-    else:
-        df_clean['Cat_Clean'] = 'Médico Estándar / Sin Cat.'
-
-    # Normalización Segura de Pareto
-    if col_pareto_name:
-        df_clean['Pareto_Clean'] = df_clean[col_pareto_name].apply(normalizar_pareto)
-    else:
-        df_clean['Pareto_Clean'] = 'Institución No Pareto'
-
-    # Evaluación cualitativa
+    df_clean['Cat_Clean'] = df_clean[col_cat].apply(normalizar_categoria) if col_cat else 'Médico Estándar / Sin Cat.'
+    df_clean['Pareto_Clean'] = df_clean[col_pareto_name].apply(normalizar_pareto) if col_pareto_name else 'Institución No Pareto'
     df_clean['Nivel_Tecnica_Ventas'] = df_clean['Comentario_str'].apply(evaluar_tecnica_ventas)
 
-    # 3. BARRA DE FILTROS GLOBALES
+    # BARRA DE FILTROS GLOBALES ESTILO E-METRICS
     c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.2, 1.2, 1.2, 1, 1])
-    
     with c_f1:
         regiones = ["Todas"] + sorted([str(x) for x in df_clean['Región'].dropna().unique()]) if 'Región' in df_clean.columns else ["Todas"]
         sel_region = st.selectbox("Coordinación Regional", regiones)
@@ -153,20 +178,13 @@ if uploaded_file is not None:
         st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
         only_pareto = st.checkbox("Solo Cuentas Pareto 🏥", value=False)
 
-    # Filtrado dinámico
     df_filtered = df_clean.copy()
-    if sel_region != "Todas":
-        df_filtered = df_filtered[df_filtered['Región'] == sel_region]
-    if sel_linea != "Todas":
-        df_filtered = df_filtered[df_filtered['Línea'] == sel_linea]
-    if sel_rep != "Todas":
-        df_filtered = df_filtered[df_filtered['Representante'] == sel_rep]
-    if sel_cat != "Todas":
-        df_filtered = df_filtered[df_filtered['Cat_Clean'] == sel_cat]
-    if only_pareto:
-        df_filtered = df_filtered[df_filtered['Pareto_Clean'] == 'Institución Pareto']
+    if sel_region != "Todas": df_filtered = df_filtered[df_filtered['Región'] == sel_region]
+    if sel_linea != "Todas": df_filtered = df_filtered[df_filtered['Línea'] == sel_linea]
+    if sel_rep != "Todas": df_filtered = df_filtered[df_filtered['Representante'] == sel_rep]
+    if sel_cat != "Todas": df_filtered = df_filtered[df_filtered['Cat_Clean'] == sel_cat]
+    if only_pareto: df_filtered = df_filtered[df_filtered['Pareto_Clean'] == 'Institución Pareto']
 
-    # Métricas Globales
     total_visitas = len(df_filtered)
     doc_id_col = 'Cod. único Médicos' if 'Cod. único Médicos' in df_filtered.columns else ('Cod. único' if 'Cod. único' in df_filtered.columns else 'Médicos')
     medicos = df_filtered[doc_id_col].nunique() if doc_id_col in df_filtered.columns else 0
@@ -178,17 +196,16 @@ if uploaded_file is not None:
     cnt_baja_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Baja Calidad (Trámite / Administrativo)").sum()
     pct_baja_calidad = round((cnt_baja_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
 
-    # Tarjetas KPI
+    # TARJETAS KPI ESTILO E-METRICS
     k1, k2, k3, k4 = st.columns(4)
     k1.markdown(f'<div class="kpi-card"><div class="kpi-label">TOTAL VISITAS ÚNICAS</div><div class="kpi-value">{total_visitas:,}</div></div>', unsafe_allow_html=True)
     k2.markdown(f'<div class="kpi-card"><div class="kpi-label">MÉDICOS CONTACTADOS</div><div class="kpi-value">{medicos:,}</div></div>', unsafe_allow_html=True)
-    color_dup = '#FF5252' if pct_dup > 50 else '#4CAF50'
+    color_dup = '#E6007E' if pct_dup > 50 else '#A3FF00'
     k3.markdown(f'<div class="kpi-card"><div class="kpi-label">TASA COPY-PASTE</div><div class="kpi-value" style="color:{color_dup};">{pct_dup:.1f}%</div></div>', unsafe_allow_html=True)
-    k4.markdown(f'<div class="kpi-card"><div class="kpi-label">ÍNDICE VENTA CONSULTIVA</div><div class="kpi-value" style="color:#4A90E2;">{pct_alta_calidad}%</div></div>', unsafe_allow_html=True)
+    k4.markdown(f'<div class="kpi-card"><div class="kpi-label">ÍNDICE VENTA CONSULTIVA</div><div class="kpi-value" style="color:#0088FF;">{pct_alta_calidad}%</div></div>', unsafe_allow_html=True)
 
     st.markdown("###")
 
-    # 3 Pestañas
     tab_reg, tab_linea, tab_insights = st.tabs([
         "🏛️ GERENCIAS REGIONALES (SFE & Targeting TOP)", 
         "📦 GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS",
@@ -204,8 +221,8 @@ if uploaded_file is not None:
             if 'Región' in df_filtered.columns and total_visitas > 0:
                 reg_list = [{'Región': r, '% Duplicidad': get_copy_paste_rate(grp)} for r, grp in df_filtered.groupby('Región')]
                 fig1 = px.bar(pd.DataFrame(reg_list), x='Región', y='% Duplicidad', color='% Duplicidad',
-                              color_continuous_scale='Reds', template='plotly_dark', title='<b>1. Índice de Copy-Paste por Región (%)</b>')
-                fig1.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330)
+                              color_continuous_scale=['#0088FF', '#E6007E'], template='plotly_dark', title='<b>1. Índice de Copy-Paste por Región (%)</b>')
+                fig1.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=330)
                 st.plotly_chart(fig1, use_container_width=True)
 
         with r2:
@@ -214,8 +231,8 @@ if uploaded_file is not None:
                             for r, grp in df_filtered.groupby('Representante') if len(grp) >= 5]
                 rep_df = pd.DataFrame(rep_list).sort_values(by='% Copy-Paste', ascending=False).head(10)
                 fig2 = px.bar(rep_df, x='% Copy-Paste', y='Representante', orientation='h', color='% Copy-Paste',
-                              color_continuous_scale='Reds', template='plotly_dark', title='<b>2. Top 10 Reps en Alerta Copy-Paste</b>')
-                fig2.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330, yaxis={'autorange': 'reversed'})
+                              color_continuous_scale=['#0088FF', '#E6007E'], template='plotly_dark', title='<b>2. Top 10 Reps en Alerta Copy-Paste</b>')
+                fig2.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=330, yaxis={'autorange': 'reversed'})
                 st.plotly_chart(fig2, use_container_width=True)
 
         st.markdown("###")
@@ -225,10 +242,10 @@ if uploaded_file is not None:
             if total_visitas > 0:
                 doc_cat_df = df_filtered.groupby(doc_id_col)['Cat_Clean'].first().value_counts().reset_index()
                 doc_cat_df.columns = ['Categoría', 'Médicos Únicos']
-                fig_cat_pie = px.pie(doc_cat_df, names='Categoría', values='Médicos Únicos', hole=0.4,
+                fig_cat_pie = px.pie(doc_cat_df, names='Categoría', values='Médicos Únicos', hole=0.5,
                                      template='plotly_dark', title='<b>3. Composición del Panel de Médicos Únicos (TOP vs Estándar)</b>',
-                                     color_discrete_map={'Médico TOP': '#4A90E2', 'Médico Estándar / Sin Cat.': '#9AA5B1'})
-                fig_cat_pie.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330)
+                                     color_discrete_map={'Médico TOP': '#E6007E', 'Médico Estándar / Sin Cat.': '#0088FF'})
+                fig_cat_pie.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=330)
                 st.plotly_chart(fig_cat_pie, use_container_width=True)
 
         with p2:
@@ -250,17 +267,16 @@ if uploaded_file is not None:
                 p_est_pareto = round((v_est_pareto / tot_est * 100), 1) if tot_est > 0 else 0
 
                 color_matrix = [[0.2, 1.0], [0.0, 0.6]]
-                
                 text_matrix = [
                     [f"<b>{v_top_no_pareto:,}</b><br>({p_top_no_pareto}%)", f"<b>{v_top_pareto:,}</b><br>({p_top_pareto}%)"],
                     [f"<b>{v_est_no_pareto:,}</b><br>({p_est_no_pareto}%)", f"<b>{v_est_pareto:,}</b><br>({p_est_pareto}%)"]
                 ]
 
                 sem_colorscale = [
-                    [0.0, '#3A3F4D'],   # Gris (Baja prioridad)
-                    [0.2, '#E53935'],   # Rojo (Alerta / Dispersión TOP)
-                    [0.6, '#FFB300'],   # Amarillo (Oportunidad)
-                    [1.0, '#4CAF50']    # Verde (Ideal / Objetivo)
+                    [0.0, '#2D3346'],   # Fondo oscuro E-Metrics
+                    [0.2, '#E6007E'],   # Magenta Alerta
+                    [0.6, '#FFB300'],   # Amarillo
+                    [1.0, '#A3FF00']    # Verde Neón Objetivo
                 ]
 
                 fig_cross = px.imshow(
@@ -279,8 +295,8 @@ if uploaded_file is not None:
                 )
 
                 fig_cross.update_layout(
-                    paper_bgcolor='#1A1F2C', 
-                    plot_bgcolor='#262C3A', 
+                    paper_bgcolor='#1C202C', 
+                    plot_bgcolor='#2D3346', 
                     height=330, 
                     coloraxis_showscale=False,
                     xaxis_title="Tipo de Institución",
@@ -312,10 +328,10 @@ if uploaded_file is not None:
         with l1:
             calidad_df = df_filtered['Nivel_Tecnica_Ventas'].value_counts().reset_index()
             calidad_df.columns = ['Nivel de Calidad', 'Visitas']
-            fig_cal = px.pie(calidad_df, names='Nivel de Calidad', values='Visitas', hole=0.4,
-                             color_discrete_sequence=['#4CAF50', '#FFC107', '#FF5252'],
+            fig_cal = px.pie(calidad_df, names='Nivel de Calidad', values='Visitas', hole=0.5,
+                             color_discrete_sequence=['#A3FF00', '#FFB300', '#E6007E'],
                              template='plotly_dark', title='<b>1. Evaluación Cualitativa del Registro (SPIN / FAP)</b>')
-            fig_cal.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350)
+            fig_cal.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=350)
             st.plotly_chart(fig_cal, use_container_width=True)
 
         with l2:
@@ -323,8 +339,8 @@ if uploaded_file is not None:
             prod_data = [{'Producto': p, 'Visitas': df_filtered['Comentario_str'].str.contains(p, case=False, na=False).sum()} for p in prods]
             prod_df = pd.DataFrame(prod_data).sort_values(by='Visitas', ascending=False)
             fig3 = px.bar(prod_df, x='Producto', y='Visitas', color='Visitas',
-                          color_continuous_scale='Blues', template='plotly_dark', title='<b>2. Menciones por Producto (Share of Voice)</b>')
-            fig3.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350)
+                          color_continuous_scale=['#0088FF', '#A3FF00'], template='plotly_dark', title='<b>2. Menciones por Producto (Share of Voice)</b>')
+            fig3.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=350)
             st.plotly_chart(fig3, use_container_width=True)
 
         st.markdown("###")
@@ -338,9 +354,9 @@ if uploaded_file is not None:
         theme_data = [{'Eje Temático': t_name, 'Visitas': df_filtered['Comentario_str'].str.contains(t_kw, case=False, na=False).sum()} for t_name, t_kw in themes.items()]
         theme_df = pd.DataFrame(theme_data).sort_values(by='Visitas', ascending=True)
         fig4 = px.bar(theme_df, y='Eje Temático', x='Visitas', orientation='h',
-                      color='Visitas', color_continuous_scale='Greens', template='plotly_dark',
+                      color='Visitas', color_continuous_scale=['#0088FF', '#A3FF00'], template='plotly_dark',
                       title='<b>3. Ejes Temáticos y Barreras detectadas en Consultorio</b>')
-        fig4.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=320)
+        fig4.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=320)
         st.plotly_chart(fig4, use_container_width=True)
 
         st.markdown("---")
@@ -377,12 +393,11 @@ if uploaded_file is not None:
             height=300
         )
 
-    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS COMPLETOS (SFE & PRODUCTO C-LEVEL) ---
+    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS COMPLETOS ---
     with tab_insights:
         st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa Integral (C-Level)")
         st.caption("Síntesis automática de inteligencia de mercado, targeting, técnica de ventas y barreras de producto.")
 
-        # 1. Cálculos SFE y Targeting
         docs_top = df_filtered[df_filtered['Cat_Clean']=='Médico TOP'][doc_id_col].nunique() if doc_id_col in df_filtered.columns else 0
         pct_top = round((docs_top / medicos) * 100, 1) if medicos > 0 else 0
 
@@ -390,7 +405,6 @@ if uploaded_file is not None:
         pct_top_in_pareto = round((docs_top_pareto / docs_top) * 100, 1) if docs_top > 0 else 0
         docs_top_no_pareto = docs_top - docs_top_pareto
 
-        # 2. Cálculos Producto y Share of Voice
         prods_dict = {
             'Fortini': df_filtered['Comentario_str'].str.contains('Fortini', case=False, na=False).sum(),
             'Infatrini': df_filtered['Comentario_str'].str.contains('Infatrini', case=False, na=False).sum(),
@@ -405,7 +419,6 @@ if uploaded_file is not None:
         pct_neocate = round((prods_dict['Neocate'] / tot_menciones_prod) * 100, 1)
         pct_ketocal = round((prods_dict['Ketocal'] / tot_menciones_prod) * 100, 1)
 
-        # 3. Cálculos Barreras y Competencia
         cnt_mipres = df_filtered['Comentario_str'].str.contains('mipres|eps|autorizacion|formulacion', case=False, na=False).sum()
         pct_mipres = round((cnt_mipres / total_visitas) * 100, 1) if total_visitas > 0 else 0
 
@@ -415,10 +428,9 @@ if uploaded_file is not None:
         cnt_comp = df_filtered['Comentario_str'].str.contains('s-26|s26|similac|nan|althera|nutramigen', case=False, na=False).sum()
         pct_comp = round((cnt_comp / total_visitas) * 100, 1) if total_visitas > 0 else 0
 
-        # HALLAZGO 1: SFE Y TARGETING
         st.markdown(f"""
         <div class="insight-alert">
-            <h4 style="color:#FF5252; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa & Criterio de Selección TOP (SFE)</h4>
+            <h4 style="color:#E6007E; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa & Criterio de Selección TOP (SFE)</h4>
             <p>Se auditó un volumen de <b>{total_visitas:,} visitas</b> realizadas a <b>{medicos:,} médicos únicos</b>, encontrando una tasa de duplicidad del <b>{pct_dup}% ({cnt_dup_total:,} visitas copy-paste)</b>.</p>
             <ul>
                 <li><b>Alineación de Cuentas Clave:</b> Los visitantes declararon a <b>{docs_top:,} médicos como TOP ({pct_top}% del panel)</b>, pero únicamente el <b>{pct_top_in_pareto}% ({docs_top_pareto:,} médicos)</b> pertenecen a Instituciones Pareto.</li>
@@ -427,39 +439,34 @@ if uploaded_file is not None:
         </div>
         """, unsafe_allow_html=True)
 
-        # HALLAZGO 2: TÉCNICA DE VENTAS
         st.markdown(f"""
         <div class="insight-card">
-            <h4 style="color:#4A90E2; margin-top:0;">🎯 2. Evaluación Cualitativa de la Técnica de Ventas (SPIN / FAP)</h4>
+            <h4 style="color:#0088FF; margin-top:0;">🎯 2. Evaluación Cualitativa de la Técnica de Ventas (SPIN / FAP)</h4>
             <p>El motor de auditoría cualitativa determina que solo <b>{cnt_alta_calidad:,} visitas ({pct_alta_calidad}%)</b> presentan una estructura de <b>Venta Consultiva Real (FAP)</b> respaldada por argumentos de beneficios para el paciente o compromisos de inicio.</p>
             <ul>
-                <li><b>Trámite Administrativo:</b> Un total de <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> se limitan a registros de trámite vacíos (ej. <i>'se realiza visita'</i>, <i>'se deja muestra'</i>).</li>
-                <li><b>Acción de Red de Campo:</b> Priorizar el coaching en la redacción de objetivos y manejo de acuerdos comerciales en la visita.</li>
+                <li><b>Trámite Administrativo:</b> Un total de <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> se limitan a registros de trámite vacíos.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
 
-        # HALLAZGO 3: SHARE OF VOICE DE MARCA
         st.markdown(f"""
         <div class="insight-success">
-            <h4 style="color:#4CAF50; margin-top:0;">📦 3. Concentración del Share of Voice Verbal por Marca (Marketing)</h4>
-            <p>Sobre un total de <b>{tot_menciones_prod:,} menciones explícitas de producto</b> en las notas de consultorio, la conversación está altamente hiper-concentrada:</p>
+            <h4 style="color:#A3FF00; margin-top:0;">📦 3. Concentración del Share of Voice Verbal por Marca (Marketing)</h4>
+            <p>Sobre un total de <b>{tot_menciones_prod:,} menciones explícitas de producto</b> en las notas de consultorio:</p>
             <ul>
                 <li><b>Marcas Dominantes:</b> <b>Fortini ({prods_dict['Fortini']:,} menciones - {pct_fortini}%)</b> e <b>Infatrini ({prods_dict['Infatrini']:,} menciones - {pct_infatrini}%)</b> suman el <b>{round(pct_fortini + pct_infatrini, 1)}% de la conversación promocional verbal</b>.</li>
-                <li><b>Oportunidad Fórmulas Especializadas:</b> Productos de alto margen como <b>Neocate ({prods_dict['Neocate']:,} menciones - {pct_neocate}%)</b> y <b>Ketocal ({prods_dict['Ketocal']:,} menciones - {pct_ketocal}%)</b> muestran una baja participación verbal en consultorio, requiriendo un plan de activación con la gerencia de producto.</li>
+                <li><b>Oportunidad Fórmulas Especializadas:</b> Productos de alto margen como <b>Neocate ({prods_dict['Neocate']:,} menciones - {pct_neocate}%)</b> y <b>Ketocal ({prods_dict['Ketocal']:,} menciones - {pct_ketocal}%)</b> muestran una baja participación verbal.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
 
-        # HALLAZGO 4: BARRERAS Y COMPETENCIA
         st.markdown(f"""
-        <div class="insight-card" style="border-left: 5px solid #FFC107;">
+        <div class="insight-card" style="border-left: 5px solid #FFB300;">
             <h4 style="color:#FFB300; margin-top:0;">💬 4. Mapeo de Barreras en Consultorio y Voz del Médico (Acceso y Competencia)</h4>
-            <p>El análisis temático sobre los comentarios genuinos identifica las principales fuerzas y barreras que enfrentan las fórmulas en el día a día:</p>
             <ul>
-                <li><b>Barrera de Acceso (Mipres / EPS):</b> Se identifica como obstáculo o trámite explícito en <b>{cnt_mipres:,} visitas ({pct_mipres}% del total de interacciones)</b>.</li>
-                <li><b>Habilitador de Adherencia (PAP):</b> El Programa de Apoyo a Pacientes se cita en <b>{cnt_pap:,} visitas ({pct_pap}%)</b> como herramienta clave para el cierre.</li>
-                <li><b>Presión Competitiva en Campo:</b> Se detectaron <b>{cnt_comp:,} menciones directas ({pct_comp}%)</b> a marcas competidoras (<i>Similac, Althéra, Nutramigen, S-26</i>) con objeciones sobre precio, sabor o autorización EPS.</li>
+                <li><b>Barrera de Acceso (Mipres / EPS):</b> Se identifica como obstáculo explícito en <b>{cnt_mipres:,} visitas ({pct_mipres}% del total)</b>.</li>
+                <li><b>Habilitador de Adherencia (PAP):</b> El Programa de Apoyo a Pacientes se cita en <b>{cnt_pap:,} visitas ({pct_pap}%)</b>.</li>
+                <li><b>Presión Competitiva en Campo:</b> Se detectaron <b>{cnt_comp:,} menciones directas ({pct_comp}%)</b> a marcas competidoras (<i>Similac, Althéra, Nutramigen, S-26</i>).</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
