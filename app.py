@@ -231,26 +231,31 @@ if uploaded_file is not None:
 
         with p2:
             if total_visitas > 0:
-                # MATRIZ SEMÁFORO 2x2
+                # MATRIZ SEMÁFORO LIMPIA (Solo Número y %)
                 cross_df = df_filtered.groupby([doc_id_col, 'Cat_Clean'])['Pareto_Clean'].first().reset_index()
                 ct = pd.crosstab(cross_df['Cat_Clean'], cross_df['Pareto_Clean'])
                 
-                # Valores numéricos por cuadrante
                 v_top_no_pareto = ct.loc['Médico TOP', 'Institución No Pareto'] if ('Médico TOP' in ct.index and 'Institución No Pareto' in ct.columns) else 0
                 v_top_pareto = ct.loc['Médico TOP', 'Institución Pareto'] if ('Médico TOP' in ct.index and 'Institución Pareto' in ct.columns) else 0
                 v_est_no_pareto = ct.loc['Médico Estándar / Sin Cat.', 'Institución No Pareto'] if ('Médico Estándar / Sin Cat.' in ct.index and 'Institución No Pareto' in ct.columns) else 0
                 v_est_pareto = ct.loc['Médico Estándar / Sin Cat.', 'Institución Pareto'] if ('Médico Estándar / Sin Cat.' in ct.index and 'Institución Pareto' in ct.columns) else 0
 
-                # Matriz de colores semáforo
-                # Fila 0 (Médico TOP): [Rojo/Naranja, Verde]
-                # Fila 1 (Médico Estándar): [Gris, Amarillo]
+                tot_top = v_top_no_pareto + v_top_pareto
+                tot_est = v_est_no_pareto + v_est_pareto
+
+                p_top_no_pareto = round((v_top_no_pareto / tot_top * 100), 1) if tot_top > 0 else 0
+                p_top_pareto = round((v_top_pareto / tot_top * 100), 1) if tot_top > 0 else 0
+                p_est_no_pareto = round((v_est_no_pareto / tot_est * 100), 1) if tot_est > 0 else 0
+                p_est_pareto = round((v_est_pareto / tot_est * 100), 1) if tot_est > 0 else 0
+
                 color_matrix = [[0.2, 1.0], [0.0, 0.6]]
+                
+                # Texto limpio: Número + %
                 text_matrix = [
-                    [f"🚨 ALERTA (Riesgo)<br><b>{v_top_no_pareto:,} Médicos</b>", f"🟢 IDEAL (Objetivo)<br><b>{v_top_pareto:,} Médicos</b>"],
-                    [f"⚪ BAJA PRIORIDAD<br><b>{v_est_no_pareto:,} Médicos</b>", f"🟡 OPORTUNIDAD<br><b>{v_est_pareto:,} Médicos</b>"]
+                    [f"<b>{v_top_no_pareto:,}</b><br>({p_top_no_pareto}%)", f"<b>{v_top_pareto:,}</b><br>({p_top_pareto}%)"],
+                    [f"<b>{v_est_no_pareto:,}</b><br>({p_est_no_pareto}%)", f"<b>{v_est_pareto:,}</b><br>({p_est_pareto}%)"]
                 ]
 
-                # Escala Semáforo: 0.0 -> Gris, 0.2 -> Rojo, 0.6 -> Amarillo, 1.0 -> Verde
                 sem_colorscale = [
                     [0.0, '#3A3F4D'],   # Gris (Baja prioridad)
                     [0.2, '#E53935'],   # Rojo (Alerta / Dispersión TOP)
@@ -270,7 +275,7 @@ if uploaded_file is not None:
                 fig_cross.update_traces(
                     text=text_matrix,
                     texttemplate="%{text}",
-                    textfont=dict(size=13, color="white")
+                    textfont=dict(size=16, color="white")
                 )
 
                 fig_cross.update_layout(
