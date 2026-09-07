@@ -230,21 +230,20 @@ if uploaded_file is not None:
 
         with p2:
             if total_visitas > 0:
-                # MATRIZ HEATMAP 2x2 (Con 'Médico TOP' arriba)
+                # MATRIZ HEATMAP 2x2 (Médico TOP arriba, Institución Pareto a la derecha)
                 cross_df = df_filtered.groupby([doc_id_col, 'Cat_Clean'])['Pareto_Clean'].first().reset_index()
                 heatmap_data = pd.crosstab(cross_df['Cat_Clean'], cross_df['Pareto_Clean'])
                 
-                # Reordenar filas para colocar a los Médicos TOP en la parte superior
                 order_rows = [r for r in ['Médico TOP', 'Médico Estándar / Sin Cat.'] if r in heatmap_data.index]
-                order_cols = [c for c in ['Institución Pareto', 'Institución No Pareto'] if c in heatmap_data.columns]
+                order_cols = [c for c in ['Institución No Pareto', 'Institución Pareto'] if c in heatmap_data.columns]
                 heatmap_data = heatmap_data.reindex(index=order_rows, columns=order_cols)
                 
                 fig_cross = px.imshow(
                     heatmap_data,
                     text_auto=True,
-                    color_continuous_scale='Greens',
+                    color_continuous_scale='Tealgrn',
                     template='plotly_dark',
-                    title='<b>4. Matriz Heatmap: Conteo de Médicos por Cuadrante</b>'
+                    title='<b>4. Matriz Alignment: Conteo de Médicos (Objetivo: Cuadrante Sup. Derecho)</b>'
                 )
                 
                 fig_cross.update_layout(
