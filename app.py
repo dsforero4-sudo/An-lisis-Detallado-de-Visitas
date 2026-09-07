@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -230,26 +231,53 @@ if uploaded_file is not None:
 
         with p2:
             if total_visitas > 0:
-                # MATRIZ HEATMAP 2x2 (Médico TOP arriba, Institución Pareto a la derecha)
+                # MATRIZ SEMÁFORO 2x2
                 cross_df = df_filtered.groupby([doc_id_col, 'Cat_Clean'])['Pareto_Clean'].first().reset_index()
-                heatmap_data = pd.crosstab(cross_df['Cat_Clean'], cross_df['Pareto_Clean'])
+                ct = pd.crosstab(cross_df['Cat_Clean'], cross_df['Pareto_Clean'])
                 
-                order_rows = [r for r in ['Médico TOP', 'Médico Estándar / Sin Cat.'] if r in heatmap_data.index]
-                order_cols = [c for c in ['Institución No Pareto', 'Institución Pareto'] if c in heatmap_data.columns]
-                heatmap_data = heatmap_data.reindex(index=order_rows, columns=order_cols)
-                
+                # Valores numéricos por cuadrante
+                v_top_no_pareto = ct.loc['Médico TOP', 'Institución No Pareto'] if ('Médico TOP' in ct.index and 'Institución No Pareto' in ct.columns) else 0
+                v_top_pareto = ct.loc['Médico TOP', 'Institución Pareto'] if ('Médico TOP' in ct.index and 'Institución Pareto' in ct.columns) else 0
+                v_est_no_pareto = ct.loc['Médico Estándar / Sin Cat.', 'Institución No Pareto'] if ('Médico Estándar / Sin Cat.' in ct.index and 'Institución No Pareto' in ct.columns) else 0
+                v_est_pareto = ct.loc['Médico Estándar / Sin Cat.', 'Institución Pareto'] if ('Médico Estándar / Sin Cat.' in ct.index and 'Institución Pareto' in ct.columns) else 0
+
+                # Matriz de colores semáforo
+                # Fila 0 (Médico TOP): [Rojo/Naranja, Verde]
+                # Fila 1 (Médico Estándar): [Gris, Amarillo]
+                color_matrix = [[0.2, 1.0], [0.0, 0.6]]
+                text_matrix = [
+                    [f"🚨 ALERTA (Riesgo)<br><b>{v_top_no_pareto:,} Médicos</b>", f"🟢 IDEAL (Objetivo)<br><b>{v_top_pareto:,} Médicos</b>"],
+                    [f"⚪ BAJA PRIORIDAD<br><b>{v_est_no_pareto:,} Médicos</b>", f"🟡 OPORTUNIDAD<br><b>{v_est_pareto:,} Médicos</b>"]
+                ]
+
+                # Escala Semáforo: 0.0 -> Gris, 0.2 -> Rojo, 0.6 -> Amarillo, 1.0 -> Verde
+                sem_colorscale = [
+                    [0.0, '#3A3F4D'],   # Gris (Baja prioridad)
+                    [0.2, '#E53935'],   # Rojo (Alerta / Dispersión TOP)
+                    [0.6, '#FFB300'],   # Amarillo (Oportunidad)
+                    [1.0, '#4CAF50']    # Verde (Ideal / Objetivo)
+                ]
+
                 fig_cross = px.imshow(
-                    heatmap_data,
-                    text_auto=True,
-                    color_continuous_scale='Tealgrn',
+                    color_matrix,
+                    x=['Institución No Pareto', 'Institución Pareto'],
+                    y=['Médico TOP', 'Médico Estándar / Sin Cat.'],
+                    color_continuous_scale=sem_colorscale,
                     template='plotly_dark',
-                    title='<b>4. Matriz Alignment: Conteo de Médicos (Objetivo: Cuadrante Sup. Derecho)</b>'
+                    title='<b>4. Matriz Alignment Semáforo: Ubicación de Médicos TOP</b>'
                 )
-                
+
+                fig_cross.update_traces(
+                    text=text_matrix,
+                    texttemplate="%{text}",
+                    textfont=dict(size=13, color="white")
+                )
+
                 fig_cross.update_layout(
                     paper_bgcolor='#1A1F2C', 
                     plot_bgcolor='#262C3A', 
                     height=330, 
+                    coloraxis_showscale=False,
                     xaxis_title="Tipo de Institución",
                     yaxis_title="Categoría Médico"
                 )
