@@ -84,11 +84,22 @@ def normalizar_categoria(val):
     if pd.isna(val):
         return 'Médico Estándar / Sin Cat.'
     val_str = str(val).strip().upper()
-    if val_str in ['NAN', 'NONE', '', 'NULL', 'NONE']:
+    if val_str in ['NAN', 'NONE', '', 'NULL']:
         return 'Médico Estándar / Sin Cat.'
     if 'TOP' in val_str:
         return 'Médico TOP'
     return 'Médico Estándar / Sin Cat.'
+
+# Función segura para clasificar Institución Pareto
+def normalizar_pareto(val):
+    if pd.isna(val):
+        return 'Institución No Pareto'
+    val_str = str(val).strip().upper()
+    if val_str in ['NAN', 'NONE', '', 'NULL', 'NO', 'FALSE', '0']:
+        return 'Institución No Pareto'
+    if any(k in val_str for k in ['SI', 'SÍ', 'PARETO', '1', 'TRUE']):
+        return 'Institución Pareto'
+    return 'Institución No Pareto'
 
 uploaded_file = st.file_uploader("Cargar Reporte de Visitas (Excel / CSV)", type=["xlsx", "xls", "csv"])
 
@@ -114,13 +125,11 @@ if uploaded_file is not None:
     else:
         df_clean['Cat_Clean'] = 'Médico Estándar / Sin Cat.'
 
-    # Normalización de Pareto
+    # Normalización Segura de Pareto
     if col_pareto_name:
-        df_clean['Pareto_Clean'] = df_clean[col_pareto_name].astype(str).str.upper().apply(
-            lambda x: 'Institución Pareto' if any(k in x for k in ['SI', 'SÍ', 'PARETO', '1', 'TRUE']) else 'Institución No Pareto'
-        )
+        df_clean['Pareto_Clean'] = df_clean[col_pareto_name].apply(normalizar_pareto)
     else:
-        df_clean['Pareto_Clean'] = 'No Especificado'
+        df_clean['Pareto_Clean'] = 'Institución No Pareto'
 
     # Evaluación cualitativa
     df_clean['Nivel_Tecnica_Ventas'] = df_clean['Comentario_str'].apply(evaluar_tecnica_ventas)
@@ -325,10 +334,10 @@ if uploaded_file is not None:
         st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa (C-Level)")
         st.caption("Argumentación basada en métricas exactas, Targeting de Médicos TOP y Cuentas Pareto.")
 
-        docs_top = df_filtered[df_filtered['Cat_Clean']=='Médico TOP'][doc_id_col].nunique()
+        docs_top = df_filtered[df_filtered['Cat_Clean']=='Médico TOP'][doc_id_col].nunique() if doc_id_col in df_filtered.columns else 0
         pct_top = round((docs_top / medicos) * 100, 1) if medicos > 0 else 0
 
-        docs_top_pareto = df_filtered[(df_filtered['Cat_Clean']=='Médico TOP') & (df_filtered['Pareto_Clean']=='Institución Pareto')][doc_id_col].nunique()
+        docs_top_pareto = df_filtered[(df_filtered['Cat_Clean']=='Médico TOP') & (df_filtered['Pareto_Clean']=='Institución Pareto')][doc_id_col].nunique() if doc_id_col in df_filtered.columns else 0
         pct_top_in_pareto = round((docs_top_pareto / docs_top) * 100, 1) if docs_top > 0 else 0
 
         st.markdown(f"""
