@@ -50,7 +50,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Pharmadvisor | E-Metrics BI Executive")
-st.caption("Panel de Inteligencia de Mercado, Auditoría SFE y Técnica de Ventas (SPIN / FAP)")
+st.caption("Panel de Inteligencia de Mercado, Targeting SFE, Instituciones Pareto y Técnica de Ventas (SPIN / FAP)")
 
 # Función de Copy-Paste
 def get_copy_paste_rate(df_sub):
@@ -93,21 +93,34 @@ if uploaded_file is not None:
     df_clean['Comentario_str'] = df_clean['Comentario'].astype(str).str.strip() if 'Comentario' in df_clean.columns else ""
     df_clean['Objetivo_str'] = df_clean['Objetivo'].astype(str).str.strip() if 'Objetivo' in df_clean.columns else ""
 
+    # Normalizar Columna Categoría e Institución Pareto
+    col_cat = 'Categoría' if 'Categoría' in df_clean.columns else ('Categoria' if 'Categoria' in df_clean.columns else None)
+    col_pareto = [c for c in df_clean.columns if 'pareto' in c.lower()]
+    col_pareto_name = col_pareto[0] if col_pareto else None
+
     # Evaluación cualitativa
     df_clean['Nivel_Tecnica_Ventas'] = df_clean['Comentario_str'].apply(evaluar_tecnica_ventas)
 
-    # Filtros Globales
-    col1, col2, col3 = st.columns(3)
-    with col1:
+    # 3. BARRA DE FILTROS GLOBALES AMPLIADA (CON TARGETING Y PARETO)
+    c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.2, 1.2, 1.2, 1, 1])
+    
+    with c_f1:
         regiones = ["Todas"] + sorted([str(x) for x in df_clean['Región'].dropna().unique()]) if 'Región' in df_clean.columns else ["Todas"]
         sel_region = st.selectbox("Coordinación Regional", regiones)
-    with col2:
+    with c_f2:
         lineas = ["Todas"] + sorted([str(x) for x in df_clean['Línea'].dropna().unique()]) if 'Línea' in df_clean.columns else ["Todas"]
         sel_linea = st.selectbox("Línea de Producto", lineas)
-    with col3:
+    with c_f3:
         reps = ["Todas"] + sorted([str(x) for x in df_clean['Representante'].dropna().unique()]) if 'Representante' in df_clean.columns else ["Todas"]
         sel_rep = st.selectbox("Representante (SFE)", reps)
+    with c_f4:
+        categorias = ["Todas"] + sorted([str(x) for x in df_clean[col_cat].dropna().unique()]) if col_cat else ["Todas"]
+        sel_cat = st.selectbox("Categoría Médico", categorias)
+    with c_f5:
+        st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
+        only_pareto = st.checkbox("Solo Cuentas Pareto 🏥", value=False)
 
+    # Filtrado dinámico
     df_filtered = df_clean.copy()
     if sel_region != "Todas":
         df_filtered = df_filtered[df_filtered['Región'] == sel_region]
@@ -115,6 +128,10 @@ if uploaded_file is not None:
         df_filtered = df_filtered[df_filtered['Línea'] == sel_linea]
     if sel_rep != "Todas":
         df_filtered = df_filtered[df_filtered['Representante'] == sel_rep]
+    if col_cat and sel_cat != "Todas":
+        df_filtered = df_filtered[df_filtered[col_cat] == sel_cat]
+    if only_pareto and col_pareto_name:
+        df_filtered = df_filtered[df_filtered[col_pareto_name].astype(str).str.contains('SI|SÍ|PARETO|1|TRUE', case=False, na=False)]
 
     # Métricas Globales
     total_visitas = len(df_filtered)
@@ -144,21 +161,23 @@ if uploaded_file is not None:
 
     # 3 Pestañas
     tab_reg, tab_linea, tab_insights = st.tabs([
-        "🏛️ GERENCIAS REGIONALES (SFE & Territorio)", 
+        "🏛️ GERENCIAS REGIONALES (SFE, Targeting & Pareto)", 
         "📦 GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS",
         "💡 HALLAZGOS ESTRATÉGICOS C-LEVEL"
     ])
 
     # --- PESTAÑA 1: GERENCIAS REGIONALES ---
     with tab_reg:
-        st.subheader("Auditoría de Desempeño Territorial y Calidad SFE")
+        st.subheader("Auditoría Territorial, Cobertura Target y Cuentas Pareto")
+        
+        # Fila 1: Copy Paste por Región y Top Reps
         r1, r2 = st.columns(2)
         with r1:
             if 'Región' in df_filtered.columns and total_visitas > 0:
                 reg_list = [{'Región': r, '% Duplicidad': get_copy_paste_rate(grp)} for r, grp in df_filtered.groupby('Región')]
                 fig1 = px.bar(pd.DataFrame(reg_list), x='Región', y='% Duplicidad', color='% Duplicidad',
                               color_continuous_scale='Reds', template='plotly_dark', title='<b>Índice de Copy-Paste por Región (%)</b>')
-                fig1.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350)
+                fig1.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330)
                 st.plotly_chart(fig1, use_container_width=True)
 
         with r2:
@@ -168,9 +187,33 @@ if uploaded_file is not None:
                 rep_df = pd.DataFrame(rep_list).sort_values(by='% Copy-Paste', ascending=False).head(10)
                 fig2 = px.bar(rep_df, x='% Copy-Paste', y='Representante', orientation='h', color='% Copy-Paste',
                               color_continuous_scale='Reds', template='plotly_dark', title='<b>Top 10 Reps en Alerta Copy-Paste</b>')
-                fig2.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=350, yaxis={'autorange': 'reversed'})
+                fig2.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330, yaxis={'autorange': 'reversed'})
                 st.plotly_chart(fig2, use_container_width=True)
 
+        # Fila 2: Análisis de Targeting y Pareto
+        st.markdown("###")
+        p1, p2 = st.columns(2)
+        with p1:
+            if col_cat and total_visitas > 0:
+                cat_df = df_filtered[col_cat].value_counts().reset_index()
+                cat_df.columns = ['Categoría', 'Visitas']
+                fig_cat = px.pie(cat_df, names='Categoría', values='Visitas', hole=0.4,
+                                 template='plotly_dark', title='<b>Distribución de Visitas por Categoría de Médico (Target)</b>',
+                                 color_discrete_sequence=px.colors.qualitative.Set2)
+                fig_cat.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330)
+                st.plotly_chart(fig_cat, use_container_width=True)
+
+        with p2:
+            if col_pareto_name and total_visitas > 0:
+                pareto_df = df_filtered[col_pareto_name].astype(str).value_counts().reset_index()
+                pareto_df.columns = ['Es Pareto', 'Visitas']
+                fig_par = px.bar(pareto_df, x='Es Pareto', y='Visitas', color='Es Pareto',
+                                 template='plotly_dark', title='<b>Concentración de Visitas en Cuentas Pareto</b>',
+                                 color_discrete_map={'SI': '#4CAF50', 'SÍ': '#4CAF50', 'NO': '#FFC107'})
+                fig_par.update_layout(paper_bgcolor='#1A1F2C', plot_bgcolor='#262C3A', height=330)
+                st.plotly_chart(fig_par, use_container_width=True)
+
+        # Fila 3: Tabla de Control SFE
         st.markdown("#### Tabla de Control de la Fuerza de Ventas")
         if 'Representante' in df_filtered.columns:
             tabla_sfe = pd.DataFrame([
@@ -180,6 +223,7 @@ if uploaded_file is not None:
                     'Representante': r,
                     'Visitas Totales': len(grp),
                     'Médicos Únicos': grp['Cod. único Médicos'].nunique() if 'Cod. único Médicos' in grp.columns else grp['Médicos'].nunique(),
+                    '% Visitas Pareto': round((grp[col_pareto_name].astype(str).str.contains('SI|SÍ|PARETO|1|TRUE', case=False, na=False).sum() / len(grp)) * 100, 1) if col_pareto_name else 0,
                     '% Copy-Paste': get_copy_paste_rate(grp)
                 } for r, grp in df_filtered.groupby('Representante')
             ]).sort_values(by='% Copy-Paste', ascending=False)
@@ -243,6 +287,8 @@ if uploaded_file is not None:
             comentarios_display = comentarios_display[comentarios_display['Comentario_str'].str.contains(kw_input, case=False, na=False)]
 
         cols_vista = ['Línea', 'Especialidad Promocional', 'Representante', 'Objetivo_str', 'Comentario_str']
+        if col_cat: cols_vista.append(col_cat)
+        if col_pareto_name: cols_vista.append(col_pareto_name)
         cols_presentes = [c for c in cols_vista if c in comentarios_display.columns]
 
         st.markdown(f"**Se encontraron {len(comentarios_display):,} observaciones cualitativas reales:**")
@@ -256,10 +302,10 @@ if uploaded_file is not None:
             height=300
         )
 
-    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS CON SUSTENTACIÓN NUMÉRICA ---
+    # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS CON SUSTENTACIÓN NUMÉRICA Y PARETO ---
     with tab_insights:
         st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa (C-Level)")
-        st.caption("Argumentación basada en métricas exactas del lote cargado para defensa en comités estratégicos.")
+        st.caption("Argumentación basada en métricas exactas, Targeting y Cuentas Pareto.")
 
         # Cálculos de sustentación para productos
         prods_dict = {
@@ -275,23 +321,18 @@ if uploaded_file is not None:
         pct_infatrini = round((prods_dict['Infatrini'] / total_menciones_prod) * 100, 1)
         pct_neocate = round((prods_dict['Neocate'] / total_menciones_prod) * 100, 1)
 
-        # Cálculos de barreras cualitativas
-        cnt_mipres = df_filtered['Comentario_str'].str.contains('mipres|eps|autorizacion|formulacion', case=False, na=False).sum()
-        pct_mipres_visitas = round((cnt_mipres / total_visitas) * 100, 1) if total_visitas > 0 else 0
+        # Cálculos de Pareto y Categoría
+        cnt_pareto = df_filtered[col_pareto_name].astype(str).str.contains('SI|SÍ|PARETO|1|TRUE', case=False, na=False).sum() if col_pareto_name else 0
+        pct_pareto_tot = round((cnt_pareto / total_visitas) * 100, 1) if total_visitas > 0 else 0
 
-        cnt_pap = df_filtered['Comentario_str'].str.contains('pap|programa|fundacion', case=False, na=False).sum()
-        pct_pap_visitas = round((cnt_pap / total_visitas) * 100, 1) if total_visitas > 0 else 0
-
-        cnt_comp = df_filtered['Comentario_str'].str.contains('s-26|s26|similac|nan|althera|nutramigen', case=False, na=False).sum()
-
-        # Tarjeta 1: Sustentación SFE
+        # Tarjeta 1: Sustentación SFE y Targeting
         st.markdown(f"""
         <div class="insight-alert">
-            <h4 style="color:#FF5252; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa (Sustentación SFE)</h4>
-            <p>De un universo total de <b>{total_visitas:,} visitas registradas</b> realizadas a <b>{medicos:,} médicos únicos</b>, se constata una tasa global de duplicidad del <b>{pct_dup}% ({cnt_dup_total:,} visitas duplicadas)</b>.</p>
+            <h4 style="color:#FF5252; margin-top:0;">🚨 1. Auditoría de Disciplina SFE & Concentración en Cuentas Pareto</h4>
+            <p>De un universo total de <b>{total_visitas:,} visitas registradas</b> a <b>{medicos:,} médicos únicos</b>, se constata una tasa de duplicidad del <b>{pct_dup}% ({cnt_dup_total:,} visitas duplicadas)</b>.</p>
             <ul>
-                <li><b>Evidencia Territorial:</b> Coordinaciones como <b>Coordinación LM ({get_copy_paste_rate(df_filtered[df_filtered['Región']=='COORDINACIÓN LM']) if 'Región' in df_filtered.columns and 'COORDINACIÓN LM' in df_filtered['Región'].values else 85.4}%)</b> y <b>Coordinación AH ({get_copy_paste_rate(df_filtered[df_filtered['Región']=='COORDINACION AH']) if 'Región' in df_filtered.columns and 'COORDINACION AH' in df_filtered['Región'].values else 69.4}%)</b> concentran el mayor volumen de duplicidad.</li>
-                <li><b>Diagnóstico SFE:</b> Existe un hábito de <i>'Cumplimiento por Marcar'</i> donde el <b>{pct_dup}% del tiempo administrativo del CRM</b> no está generando información de inteligencia comercial útil para la compañía.</li>
+                <li><b>Penetración en Cuentas Pareto:</b> <b>{cnt_pareto:,} visitas ({pct_pareto_tot}%)</b> se concentran en Instituciones Pareto de alto volumen. El restante <b>{round(100 - pct_pareto_tot, 1)}% del esfuerzo comercial</b> se dispersa en cuentas no estratégicas.</li>
+                <li><b>Riesgo en Cuentas Clave:</b> La alta duplicidad registrada en coordinaciones críticas evidencia que la compañía no está capturando inteligencia comercial valiosa en sus instituciones de mayor facturación.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -302,8 +343,8 @@ if uploaded_file is not None:
             <h4 style="color:#4A90E2; margin-top:0;">🎯 2. Madurez de la Técnica de Ventas (Sustentación SPIN / FAP)</h4>
             <p>Al auditar la calidad del lenguaje registrado en el CRM, únicamente <b>{cnt_alta_calidad:,} visitas ({pct_alta_calidad}%)</b> presentan una estructura de <b>Venta Consultiva (FAP)</b> respaldada por compromisos o beneficios del paciente.</p>
             <ul>
-                <li><b>Volumen de Trámite Adm:</b> <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> fueron clasificadas en <i>Baja Calidad</i> al contener únicamente frases trámite (ej. <i>'se realiza visita medica'</i> o <i>'se entrega muestra'</i>).</li>
-                <li><b>Justificación de Capacitación:</b> El <b>{pct_baja_calidad}% de las interacciones</b> no refleja en el CRM el cumplimiento del objetivo comercial planteado previamente.</li>
+                <li><b>Volumen de Trámite Adm:</b> <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> fueron clasificadas en <i>Baja Calidad</i> al contener únicamente frases trámite.</li>
+                <li><b>Brecha Comercial:</b> Existe una oportunidad directa de capacitar a la fuerza de ventas para que cada contacto en Instituciones Pareto se registre con un objetivo y acuerdo comercial claro.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -312,11 +353,10 @@ if uploaded_file is not None:
         st.markdown(f"""
         <div class="insight-success">
             <h4 style="color:#4CAF50; margin-top:0;">📦 3. Posicionamiento de Marca y Voz del Médico (Sustentación Marketing)</h4>
-            <p>Frente a los cuestionamientos de estrategia de producto, la data demuestra la siguiente distribución de la conversación verbal en consultorio sobre un total de <b>{total_menciones_prod:,} menciones de marca</b>:</p>
+            <p>Sobre un total de <b>{total_menciones_prod:,} menciones de marca</b> en la parrilla promocional:</p>
             <ul>
-                <li><b>Concentración de Portafolio:</b> <b>Fortini ({prods_dict['Fortini']:,} menciones - {pct_fortini}%)</b> e <b>Infatrini ({prods_dict['Infatrini']:,} menciones - {pct_infatrini}%)</b> capturan el <b>{round(pct_fortini + pct_infatrini, 1)}% del Share of Voice Verbal</b>. Por el contrario, fórmulas de alto margen como <b>Neocate solo alcanzan el {pct_neocate}% ({prods_dict['Neocate']:,} menciones)</b>.</li>
-                <li><b>Frecuencia de Barreras de Acceso:</b> Los trámites de <b>Mipres / EPS se mencionan explícitamente en {cnt_mipres:,} visitas ({pct_mipres_visitas}% del total)</b>, siendo la principal barrera administrativa. El <b>Programa de Pacientes (PAP) se cita en {cnt_pap:,} visitas ({pct_pap_visitas}%)</b>.</li>
-                <li><b>Presión Competitiva:</b> Se identificaron <b>{cnt_comp:,} menciones directas a marcas competidoras</b> (<i>Similac, Althéra, Nutramigen, S-26</i>) en los comentarios genuinos de consultorio.</li>
+                <li><b>Concentración de Portafolio:</b> <b>Fortini ({prods_dict['Fortini']:,} menciones - {pct_fortini}%)</b> e <b>Infatrini ({prods_dict['Infatrini']:,} menciones - {pct_infatrini}%)</b> capturan el <b>{round(pct_fortini + pct_infatrini, 1)}% del Share of Voice Verbal</b>. Fórmulas de alta especialidad como <b>Neocate alcanzan el {pct_neocate}% ({prods_dict['Neocate']:,} menciones)</b>.</li>
+                <li><b>Alineación Target:</b> Utilice el filtro <i>'Solo Cuentas Pareto'</i> en la cabecera para evaluar si la presencia de marcas especializadas aumenta proporcionalmente en las instituciones de mayor complejidad médica.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
