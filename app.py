@@ -174,18 +174,19 @@ if uploaded_file is not None:
     col_ciclo = [c for c in df_clean.columns if 'ciclo' in c.lower()]
     col_ciclo_name = col_ciclo[0] if col_ciclo else None
 
-    # BÚSQUEDA SEGURA Y DINÁMICA DE LA COLUMNA DE MÉDICOS (Previene KeyError)
+    # BÚSQUEDA SEGURA DE COLUMNAS DE MÉDICO Y REPRESENTANTE
     doc_candidates = [c for c in df_clean.columns if any(k in str(c).lower() for k in ['único', 'unico', 'médico', 'medico', 'cod. médico'])]
     if doc_candidates:
         doc_id_col = doc_candidates[0]
     else:
-        if 'Médico' in df_clean.columns:
-            doc_id_col = 'Médico'
-        elif 'Medico' in df_clean.columns:
-            doc_id_col = 'Medico'
+        if 'Médico' in df_clean.columns: doc_id_col = 'Médico'
+        elif 'Medico' in df_clean.columns: doc_id_col = 'Medico'
         else:
             df_clean['ID_Temp_Medico'] = df_clean.index
             doc_id_col = 'ID_Temp_Medico'
+
+    rep_candidates = [c for c in df_clean.columns if any(k in str(c).lower() for k in ['representante', 'visitador', 'rep'])]
+    col_rep_name = rep_candidates[0] if rep_candidates else None
 
     df_clean['Cat_Clean'] = df_clean[col_cat].apply(normalizar_categoria) if col_cat else 'Médico Estándar / Sin Cat.'
     df_clean['Pareto_Clean'] = df_clean[col_pareto_name].apply(normalizar_pareto) if col_pareto_name else 'Institución No Pareto'
@@ -219,10 +220,10 @@ if uploaded_file is not None:
             df_step = df_step[df_step['Línea'].astype(str).isin(sel_linea)]
 
     with c_f3:
-        rep_opt = sorted([str(x) for x in df_step['Representante'].dropna().unique()]) if 'Representante' in df_step.columns else []
+        rep_opt = sorted([str(x) for x in df_step[col_rep_name].dropna().unique()]) if col_rep_name else []
         sel_rep = st.multiselect("Representante (SFE)", rep_opt)
-        if sel_rep and 'Representante' in df_step.columns:
-            df_step = df_step[df_step['Representante'].astype(str).isin(sel_rep)]
+        if sel_rep and col_rep_name:
+            df_step = df_step[df_step[col_rep_name].astype(str).isin(sel_rep)]
 
     with c_f4:
         cat_opt = sorted([str(x) for x in df_step['Cat_Clean'].dropna().unique()])
@@ -276,9 +277,9 @@ if uploaded_file is not None:
                 st.plotly_chart(fig1, use_container_width=True)
 
         with r2:
-            if 'Representante' in df_filtered.columns:
+            if col_rep_name:
                 rep_list = [{'Representante': r, '% Copy-Paste': get_copy_paste_rate(grp)} 
-                            for r, grp in df_filtered.groupby('Representante') if len(grp) >= 5]
+                            for r, grp in df_filtered.groupby(col_rep_name) if len(grp) >= 5]
                 rep_df = pd.DataFrame(rep_list).sort_values(by='% Copy-Paste', ascending=False).head(10)
                 fig2 = px.bar(rep_df, x='% Copy-Paste', y='Representante', orientation='h', color='% Copy-Paste',
                               color_continuous_scale=['#0088FF', '#E6007E'], template='plotly_dark', title='<b>2. Top 10 Reps en Alerta Copy-Paste</b>')
@@ -355,7 +356,7 @@ if uploaded_file is not None:
                 st.plotly_chart(fig_cross, use_container_width=True)
 
         st.markdown("#### Tabla de Control de la Fuerza de Ventas")
-        if 'Representante' in df_filtered.columns:
+        if col_rep_name:
             tabla_sfe = pd.DataFrame([
                 {
                     'Coordinación': grp['Región'].iloc[0] if 'Región' in grp.columns else 'N/A',
@@ -366,7 +367,7 @@ if uploaded_file is not None:
                     'Médicos TOP': grp[grp['Cat_Clean']=='Médico TOP'][doc_id_col].nunique(),
                     '% Visitas Pareto': round((grp['Pareto_Clean'].value_counts().get('Institución Pareto', 0) / len(grp)) * 100, 1),
                     '% Copy-Paste': get_copy_paste_rate(grp)
-                } for r, grp in df_filtered.groupby('Representante')
+                } for r, grp in df_filtered.groupby(col_rep_name)
             ]).sort_values(by='% Copy-Paste', ascending=False)
             st.dataframe(tabla_sfe, use_container_width=True)
 
@@ -442,7 +443,9 @@ if uploaded_file is not None:
         st.markdown("---")
         st.markdown("#### 💬 Módulos de Voz del Médico (Comentarios Reales de Consultorio)")
         
-        comentarios_genuinos = df_filtered[~df_filtered.duplicated(subset=['Representante', 'Comentario_str'], keep=False)].copy()
+        # Corrección dinámica para filtrar comentarios duplicados sin romper por el nombre de la columna Representante
+        subset_dup = [col_rep_name, 'Comentario_str'] if col_rep_name else ['Comentario_str']
+        comentarios_genuinos = df_filtered[~df_filtered.duplicated(subset=subset_dup, keep=False)].copy()
         
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -457,12 +460,13 @@ if uploaded_file is not None:
         if kw_input:
             comentarios_display = comentarios_display[comentarios_display['Comentario_str'].str.contains(kw_input, case=False, na=False)]
 
-        cols_vista = ['Línea', 'Especialidad Promocional', 'Representante', 'Objetivo_str', 'Comentario_str', 'Cat_Clean', 'Pareto_Clean']
+        cols_vista = ['Línea', 'Especialidad Promocional', col_rep_name, 'Objetivo_str', 'Comentario_str', 'Cat_Clean', 'Pareto_Clean']
         cols_presentes = [c for c in cols_vista if c in comentarios_display.columns]
 
         st.markdown(f"**Se encontraron {len(comentarios_display):,} observaciones cualitativas reales:**")
         st.dataframe(
             comentarios_display[cols_presentes].rename(columns={
+                col_rep_name: 'Representante',
                 'Especialidad Promocional': 'Especialidad Médico',
                 'Objetivo_str': 'Objetivo Registrado',
                 'Comentario_str': 'Comentario Registrado',
