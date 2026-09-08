@@ -130,11 +130,11 @@ def evaluar_tecnica_pharmadvisor(row, dup_series):
     has_actitud = any(k in comentario for k in kw_actitud_manejo)
     has_beneficio = any(k in comentario for k in kw_beneficios_historia)
 
-    # Nivel 1: Alta Calidad (Persuasión Pharmadvisor - Pasos 4, 5, 6 y 7: Explora, Maneja Actitud y Cierra Acuerdo)
+    # Nivel 1: Alta Calidad (Persuasión Pharmadvisor - Pasos 4 a 7)
     if (has_cierre and (has_beneficio or has_actitud)) or (has_actitud and has_cierre):
         return "Alta Calidad (Persuasión / Cierre de Acuerdo)"
     
-    # Nivel 2: Calidad Media (Presentación Pharmadvisor - Paso 3: Historia de Beneficios)
+    # Nivel 2: Calidad Media (Presentación Pharmadvisor - Paso 3)
     elif has_beneficio or has_actitud:
         return "Calidad Media (Historia de Beneficios)"
     
@@ -174,10 +174,23 @@ if uploaded_file is not None:
     col_ciclo = [c for c in df_clean.columns if 'ciclo' in c.lower()]
     col_ciclo_name = col_ciclo[0] if col_ciclo else None
 
+    # BÚSQUEDA SEGURA Y DINÁMICA DE LA COLUMNA DE MÉDICOS (Previene KeyError)
+    doc_candidates = [c for c in df_clean.columns if any(k in str(c).lower() for k in ['único', 'unico', 'médico', 'medico', 'cod. médico'])]
+    if doc_candidates:
+        doc_id_col = doc_candidates[0]
+    else:
+        if 'Médico' in df_clean.columns:
+            doc_id_col = 'Médico'
+        elif 'Medico' in df_clean.columns:
+            doc_id_col = 'Medico'
+        else:
+            df_clean['ID_Temp_Medico'] = df_clean.index
+            doc_id_col = 'ID_Temp_Medico'
+
     df_clean['Cat_Clean'] = df_clean[col_cat].apply(normalizar_categoria) if col_cat else 'Médico Estándar / Sin Cat.'
     df_clean['Pareto_Clean'] = df_clean[col_pareto_name].apply(normalizar_pareto) if col_pareto_name else 'Institución No Pareto'
 
-    # Detección de Duplicados Globale
+    # Detección de Duplicados Globales
     dup_mask = df_clean.duplicated(subset=['Comentario_str'], keep=False) & (df_clean['Comentario_str'] != "")
     df_clean['Nivel_Tecnica_Ventas'] = df_clean.apply(lambda r: evaluar_tecnica_pharmadvisor(r, dup_mask), axis=1)
 
@@ -226,7 +239,6 @@ if uploaded_file is not None:
     df_filtered = df_step.copy()
 
     total_visitas = len(df_filtered)
-    doc_id_col = 'Cod. único Médicos' if 'Cod. único Médicos' in df_filtered.columns else ('Cod. único' if 'Cod. único' in df_filtered.columns else 'Médicos')
     medicos = df_filtered[doc_id_col].nunique() if doc_id_col in df_filtered.columns else 0
 
     pct_dup = get_copy_paste_rate(df_filtered)
@@ -358,7 +370,7 @@ if uploaded_file is not None:
             ]).sort_values(by='% Copy-Paste', ascending=False)
             st.dataframe(tabla_sfe, use_container_width=True)
 
-    # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS (CUALITATIVA PHARMADVISOR) ---
+    # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS ---
     with tab_linea:
         st.subheader("Análisis de Marcas, Share of Voice y Técnica de Ventas (Pharmadvisor 7 Pasos)")
         l1, l2 = st.columns(2)
