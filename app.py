@@ -16,14 +16,12 @@ st.set_page_config(
 # Estilos CSS idénticos al Dashboard Pharmadvisor / E Metrics BI
 st.markdown("""
     <style>
-    /* Fondo General Azul Pizarra E Metrics BI */
     .stApp { 
         background-color: #2D3346; 
         color: #FFFFFF; 
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
-    /* Header Principal */
     .ph-header {
         display: flex;
         justify-content: space-between;
@@ -33,13 +31,12 @@ st.markdown("""
         margin-bottom: 20px;
     }
     .ph-title {
-        color: #E6007E; /* Magenta Pharmadvisor */
+        color: #E6007E;
         font-size: 32px;
         font-weight: bold;
         margin: 0;
     }
     
-    /* Tarjetas KPI al estilo E Metrics */
     .kpi-card {
         background-color: #1C202C;
         border-radius: 12px;
@@ -62,7 +59,6 @@ st.markdown("""
         margin-top: 5px; 
     }
     
-    /* Tarjetas de Hallazgos C-Level */
     .insight-card {
         background-color: #1C202C;
         border-left: 5px solid #0088FF;
@@ -103,7 +99,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Función de Copy-Paste
+# Función para calcular duplicidad
 def get_copy_paste_rate(df_sub):
     total = len(df_sub)
     if total == 0:
@@ -114,19 +110,37 @@ def get_copy_paste_rate(df_sub):
     dup_cnt = df_sub.duplicated(subset=['Comentario_str']).sum() if 'Comentario_str' in df_sub.columns else 0
     return round((dup_cnt / total) * 100, 1)
 
-# Función de Calificación SPIN / FAP
-def evaluar_tecnica_ventas(texto):
-    txt = str(texto).lower()
-    kw_spin = ['beneficio', 'beneficios', 'paciente', 'pacientes', 'adherencia', 'tolerancia', 
-               'iniciar', 'inicios', 'compromiso', 'acepta', 'formula', 'formulacion', 
-               'diferencia', 'diferenciador', 'falla de medro', 'alergia', 'reflujo', 'efectividad']
-    score_spin = sum(1 for kw in kw_spin if kw in txt)
-    if score_spin >= 2:
-        return "Alta Calidad (Venta Consultiva / FAP)"
-    elif score_spin == 1:
-        return "Calidad Media (Presentación de Producto)"
+# EVALUACIÓN DE TÉCNICA DE VENTAS PHARMADVISOR (7 PASOS / SOLUCIÓN 1 PENALIZACIÓN)
+def evaluar_tecnica_pharmadvisor(row, dup_series):
+    comentario = str(row.get('Comentario_str', '')).lower()
+    
+    # SOLUCIÓN 1: Penalización inmediata si el comentario está duplicado (Copy-Paste)
+    if dup_series.get(row.name, False):
+        return "Baja Calidad (Trámite / Copy-Paste)"
+    
+    if len(comentario) < 15 or comentario in ['nan', 'none', 'se realiza visita', 'se deja muestra', 'se saluda']:
+        return "Baja Calidad (Trámite / Copy-Paste)"
+    
+    # Palabras clave del Modelo Pharmadvisor
+    kw_cierre_acuerdo = ['acuerdo', 'compromiso', 'acepta', 'iniciar', 'reiniciar', 'aumentar', 'sostener', 'mantener', 'probar', 'prescribira', 'prescribirá', 'formulard']
+    kw_actitud_manejo = ['objecion', 'objeción', 'indiferente', 'esceptico', 'escéptico', 'costo', 'sabor', 'mipres', 'eps', 'cambia', 'prefiere', 'mencion']
+    kw_beneficios_historia = ['beneficio', 'ventaja', 'diferencia', 'estudio', 'evidencia', 'paciente', 'tolerancia', 'adherencia', 'falla de medro', 'alergia', 'aplv']
+
+    has_cierre = any(k in comentario for k in kw_cierre_acuerdo)
+    has_actitud = any(k in comentario for k in kw_actitud_manejo)
+    has_beneficio = any(k in comentario for k in kw_beneficios_historia)
+
+    # Nivel 1: Alta Calidad (Persuasión Pharmadvisor - Pasos 4, 5, 6 y 7: Explora, Maneja Actitud y Cierra Acuerdo)
+    if (has_cierre and (has_beneficio or has_actitud)) or (has_actitud and has_cierre):
+        return "Alta Calidad (Persuasión / Cierre de Acuerdo)"
+    
+    # Nivel 2: Calidad Media (Presentación Pharmadvisor - Paso 3: Historia de Beneficios)
+    elif has_beneficio or has_actitud:
+        return "Calidad Media (Historia de Beneficios)"
+    
+    # Nivel 3: Baja Calidad (Trámite de Muestras o Sin Propuesta)
     else:
-        return "Baja Calidad (Trámite / Administrativo)"
+        return "Baja Calidad (Trámite / Copy-Paste)"
 
 def normalizar_categoria(val):
     if pd.isna(val): return 'Médico Estándar / Sin Cat.'
@@ -157,18 +171,19 @@ if uploaded_file is not None:
     col_pareto = [c for c in df_clean.columns if 'pareto' in c.lower()]
     col_pareto_name = col_pareto[0] if col_pareto else None
     
-    # Identificar columna de Ciclo
     col_ciclo = [c for c in df_clean.columns if 'ciclo' in c.lower()]
     col_ciclo_name = col_ciclo[0] if col_ciclo else None
 
     df_clean['Cat_Clean'] = df_clean[col_cat].apply(normalizar_categoria) if col_cat else 'Médico Estándar / Sin Cat.'
     df_clean['Pareto_Clean'] = df_clean[col_pareto_name].apply(normalizar_pareto) if col_pareto_name else 'Institución No Pareto'
-    df_clean['Nivel_Tecnica_Ventas'] = df_clean['Comentario_str'].apply(evaluar_tecnica_ventas)
 
-    # BARRA DE FILTROS GLOBALES DINÁMICOS EN CASCADA (MULTISELECT)
+    # Detección de Duplicados Globale
+    dup_mask = df_clean.duplicated(subset=['Comentario_str'], keep=False) & (df_clean['Comentario_str'] != "")
+    df_clean['Nivel_Tecnica_Ventas'] = df_clean.apply(lambda r: evaluar_tecnica_pharmadvisor(r, dup_mask), axis=1)
+
+    # FILTROS GLOBALES EN CASCADA (MULTISELECT)
     df_step = df_clean.copy()
 
-    # 1. Filtro Ciclo
     c_f0, c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1, 1.2, 1.2, 1.2, 1, 0.8])
     
     with c_f0:
@@ -216,18 +231,16 @@ if uploaded_file is not None:
 
     pct_dup = get_copy_paste_rate(df_filtered)
     cnt_dup_total = int(round((pct_dup / 100) * total_visitas))
-    cnt_alta_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Alta Calidad (Venta Consultiva / FAP)").sum()
+    cnt_alta_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Alta Calidad (Persuasión / Cierre de Acuerdo)").sum()
     pct_alta_calidad = round((cnt_alta_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
-    cnt_baja_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Baja Calidad (Trámite / Administrativo)").sum()
-    pct_baja_calidad = round((cnt_baja_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
 
-    # TARJETAS KPI ESTILO E-METRICS
+    # TARJETAS KPI
     k1, k2, k3, k4 = st.columns(4)
     k1.markdown(f'<div class="kpi-card"><div class="kpi-label">TOTAL VISITAS ÚNICAS</div><div class="kpi-value">{total_visitas:,}</div></div>', unsafe_allow_html=True)
     k2.markdown(f'<div class="kpi-card"><div class="kpi-label">MÉDICOS CONTACTADOS</div><div class="kpi-value">{medicos:,}</div></div>', unsafe_allow_html=True)
     color_dup = '#E6007E' if pct_dup > 50 else '#A3FF00'
     k3.markdown(f'<div class="kpi-card"><div class="kpi-label">TASA COPY-PASTE</div><div class="kpi-value" style="color:{color_dup};">{pct_dup:.1f}%</div></div>', unsafe_allow_html=True)
-    k4.markdown(f'<div class="kpi-card"><div class="kpi-label">ÍNDICE VENTA CONSULTIVA</div><div class="kpi-value" style="color:#0088FF;">{pct_alta_calidad}%</div></div>', unsafe_allow_html=True)
+    k4.markdown(f'<div class="kpi-card"><div class="kpi-label">ÍNDICE PERSUASIÓN & ACUERDO</div><div class="kpi-value" style="color:#0088FF;">{pct_alta_calidad}%</div></div>', unsafe_allow_html=True)
 
     st.markdown("###")
 
@@ -298,10 +311,10 @@ if uploaded_file is not None:
                 ]
 
                 sem_colorscale = [
-                    [0.0, '#2D3346'],   # Fondo oscuro E-Metrics
-                    [0.2, '#E6007E'],   # Magenta Alerta
-                    [0.6, '#FFB300'],   # Amarillo
-                    [1.0, '#A3FF00']    # Verde Neón Objetivo
+                    [0.0, '#2D3346'],
+                    [0.2, '#E6007E'],
+                    [0.6, '#FFB300'],
+                    [1.0, '#A3FF00']
                 ]
 
                 fig_cross = px.imshow(
@@ -345,9 +358,9 @@ if uploaded_file is not None:
             ]).sort_values(by='% Copy-Paste', ascending=False)
             st.dataframe(tabla_sfe, use_container_width=True)
 
-    # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS ---
+    # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS (CUALITATIVA PHARMADVISOR) ---
     with tab_linea:
-        st.subheader("Análisis de Marcas, Share of Voice, Técnica de Ventas y Temas")
+        st.subheader("Análisis de Marcas, Share of Voice y Técnica de Ventas (Pharmadvisor 7 Pasos)")
         l1, l2 = st.columns(2)
 
         with l1:
@@ -355,9 +368,9 @@ if uploaded_file is not None:
             calidad_df.columns = ['Nivel de Calidad', 'Visitas']
             
             color_semaforo_map = {
-                'Alta Calidad (Venta Consultiva / FAP)': '#4CAF50',      # Verde suave
-                'Calidad Media (Presentación de Producto)': '#FFB300',   # Ámbar
-                'Baja Calidad (Trámite / Administrativo)': '#E53935'      # Rojo suave
+                'Alta Calidad (Persuasión / Cierre de Acuerdo)': '#4CAF50',
+                'Calidad Media (Historia de Beneficios)': '#FFB300',
+                'Baja Calidad (Trámite / Copy-Paste)': '#E53935'
             }
 
             fig_cal = px.pie(
@@ -368,7 +381,7 @@ if uploaded_file is not None:
                 color='Nivel de Calidad',
                 color_discrete_map=color_semaforo_map,
                 template='plotly_dark', 
-                title='<b>1. Evaluación Cualitativa del Registro (SPIN / FAP)</b>'
+                title='<b>1. Calidad de Visita (Modelo Pharmadvisor - 7 Pasos)</b>'
             )
             fig_cal.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=350)
             st.plotly_chart(fig_cal, use_container_width=True)
@@ -422,7 +435,7 @@ if uploaded_file is not None:
         c1, c2 = st.columns([1, 1])
         with c1:
             filtro_nivel = st.selectbox("Filtrar por Nivel de Calidad Comercial:", 
-                                        ["Todos los Comentarios Genuinos", "Alta Calidad (Venta Consultiva / FAP)", "Calidad Media (Presentación de Producto)", "Baja Calidad (Trámite / Administrativo)"])
+                                        ["Todos los Comentarios Genuinos", "Alta Calidad (Persuasión / Cierre de Acuerdo)", "Calidad Media (Historia de Beneficios)", "Baja Calidad (Trámite / Copy-Paste)"])
         with c2:
             kw_input = st.text_input("🔍 Buscar por Palabra Clave (Ej: Mipres, Sabor, Aceptación, Muestra, Competencia, PAP)", "")
 
@@ -451,7 +464,10 @@ if uploaded_file is not None:
     # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS COMPLETOS ---
     with tab_insights:
         st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa Integral (C-Level)")
-        st.caption("Síntesis automática de inteligencia de mercado, targeting, técnica de ventas y barreras de producto.")
+        st.caption("Síntesis automática basada en el modelo de Persuasión Pharmadvisor y Alineación SFE.")
+
+        cnt_baja_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Baja Calidad (Trámite / Copy-Paste)").sum()
+        pct_baja_calidad = round((cnt_baja_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
 
         docs_top = df_filtered[df_filtered['Cat_Clean']=='Médico TOP'][doc_id_col].nunique() if doc_id_col in df_filtered.columns else 0
         pct_top = round((docs_top / medicos) * 100, 1) if medicos > 0 else 0
@@ -485,21 +501,21 @@ if uploaded_file is not None:
 
         st.markdown(f"""
         <div class="insight-alert">
-            <h4 style="color:#E6007E; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa & Criterio de Selección TOP (SFE)</h4>
+            <h4 style="color:#E6007E; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa & Criterio TOP (SFE)</h4>
             <p>Se auditó un volumen de <b>{total_visitas:,} visitas</b> realizadas a <b>{medicos:,} médicos únicos</b>, encontrando una tasa de duplicidad del <b>{pct_dup}% ({cnt_dup_total:,} visitas copy-paste)</b>.</p>
             <ul>
                 <li><b>Alineación de Cuentas Clave:</b> Los visitantes declararon a <b>{docs_top:,} médicos como TOP ({pct_top}% del panel)</b>, pero únicamente el <b>{pct_top_in_pareto}% ({docs_top_pareto:,} médicos)</b> pertenecen a Instituciones Pareto.</li>
-                <li><b>Riesgo de Dispersión:</b> Hay <b>{docs_top_no_pareto:,} médicos clasificados como TOP ({round(100 - pct_top_in_pareto, 1)}%)</b> atendidos en instituciones de bajo flujo (No Pareto), lo que evidencia la necesidad de re-calibrar el fichero comercial.</li>
+                <li><b>Riesgo de Dispersión:</b> Hay <b>{docs_top_no_pareto:,} médicos TOP ({round(100 - pct_top_in_pareto, 1)}%)</b> atendidos en instituciones No Pareto.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
         <div class="insight-card">
-            <h4 style="color:#0088FF; margin-top:0;">🎯 2. Evaluación Cualitativa de la Técnica de Ventas (SPIN / FAP)</h4>
-            <p>El motor de auditoría cualitativa determina que solo <b>{cnt_alta_calidad:,} visitas ({pct_alta_calidad}%)</b> presentan una estructura de <b>Venta Consultiva Real (FAP)</b> respaldada por argumentos de beneficios para el paciente o compromisos de inicio.</p>
+            <h4 style="color:#0088FF; margin-top:0;">🎯 2. Evaluación Cualitativa de la Técnica de Ventas (Modelo Pharmadvisor)</h4>
+            <p>Bajo la metodología de 7 Pasos y Persuasión, solo <b>{cnt_alta_calidad:,} visitas ({pct_alta_calidad}%)</b> alcanzaron el nivel de <b>Persuasión y Cierre de Acuerdo</b> con compromiso prescriptivo explícito.</p>
             <ul>
-                <li><b>Trámite Administrativo:</b> Un total de <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> se limitan a registros de trámite vacíos.</li>
+                <li><b>Trámite y Plantilla:</b> Un total de <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> corresponden a registros repetidos (copy-paste) o trámites sin propuesta comercial.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -509,8 +525,8 @@ if uploaded_file is not None:
             <h4 style="color:#A3FF00; margin-top:0;">📦 3. Concentración del Share of Voice Verbal por Marca (Marketing)</h4>
             <p>Sobre un total de <b>{tot_menciones_prod:,} menciones explícitas de producto</b> en las notas de consultorio:</p>
             <ul>
-                <li><b>Marcas Dominantes:</b> <b>Fortini ({prods_dict['Fortini']:,} menciones - {pct_fortini}%)</b> e <b>Infatrini ({prods_dict['Infatrini']:,} menciones - {pct_infatrini}%)</b> suman el <b>{round(pct_fortini + pct_infatrini, 1)}% de la conversación promocional verbal</b>.</li>
-                <li><b>Oportunidad Fórmulas Especializadas:</b> Productos de alto margen como <b>Neocate ({prods_dict['Neocate']:,} menciones - {pct_neocate}%)</b> y <b>Ketocal ({prods_dict['Ketocal']:,} menciones - {pct_ketocal}%)</b> muestran una baja participación verbal.</li>
+                <li><b>Marcas Dominantes:</b> <b>Fortini ({prods_dict['Fortini']:,} menciones - {pct_fortini}%)</b> e <b>Infatrini ({prods_dict['Infatrini']:,} menciones - {pct_infatrini}%)</b> concentran el <b>{round(pct_fortini + pct_infatrini, 1)}% de la conversación verbal</b>.</li>
+                <li><b>Oportunidad Fórmulas Especializadas:</b> <b>Neocate ({prods_dict['Neocate']:,} menciones - {pct_neocate}%)</b> y <b>Ketocal ({prods_dict['Ketocal']:,} menciones - {pct_ketocal}%)</b> muestran baja participación en consultorio.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -519,8 +535,8 @@ if uploaded_file is not None:
         <div class="insight-card" style="border-left: 5px solid #FFB300;">
             <h4 style="color:#FFB300; margin-top:0;">💬 4. Mapeo de Barreras en Consultorio y Voz del Médico (Acceso y Competencia)</h4>
             <ul>
-                <li><b>Barrera de Acceso (Mipres / EPS):</b> Se identifica como obstáculo explícito en <b>{cnt_mipres:,} visitas ({pct_mipres}% del total)</b>.</li>
-                <li><b>Habilitador de Adherencia (PAP):</b> El Programa de Apoyo a Pacientes se cita en <b>{cnt_pap:,} visitas ({pct_pap}%)</b>.</li>
+                <li><b>Barrera de Acceso (Mipres / EPS):</b> Se cita en <b>{cnt_mipres:,} visitas ({pct_mipres}% del total)</b>.</li>
+                <li><b>Habilitador de Adherencia (PAP):</b> El Programa PAP se utiliza en <b>{cnt_pap:,} visitas ({pct_pap}%)</b>.</li>
                 <li><b>Presión Competitiva en Campo:</b> Se detectaron <b>{cnt_comp:,} menciones directas ({pct_comp}%)</b> a marcas competidoras (<i>Similac, Althéra, Nutramigen, S-26</i>).</li>
             </ul>
         </div>
