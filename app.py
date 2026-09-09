@@ -110,32 +110,46 @@ def get_copy_paste_rate(df_sub):
     dup_cnt = df_sub.duplicated(subset=['Comentario_str']).sum() if 'Comentario_str' in df_sub.columns else 0
     return round((dup_cnt / total) * 100, 1)
 
-# EVALUACIÓN DE TÉCNICA DE VENTAS PHARMADVISOR (7 PASOS / SOLUCIÓN 1 PENALIZACIÓN)
+# EVALUACIÓN DE TÉCNICA DE VENTAS Y ACUERDOS PHARMADVISOR (7 PASOS / SOLUCIÓN 1 PENALIZACIÓN)
 def evaluar_tecnica_pharmadvisor(row, dup_series):
-    comentario = str(row.get('Comentario_str', '')).lower()
+    comentario = str(row.get('Comentario_str', '')).lower().strip()
     
     # SOLUCIÓN 1: Penalización inmediata si el comentario está duplicado (Copy-Paste)
     if dup_series.get(row.name, False):
         return "Baja Calidad (Trámite / Copy-Paste)"
     
-    if len(comentario) < 15 or comentario in ['nan', 'none', 'se realiza visita', 'se deja muestra', 'se saluda']:
+    if len(comentario) < 10 or comentario in ['nan', 'none', '-', '', 'se realiza visita', 'se deja muestra', 'se saluda']:
         return "Baja Calidad (Trámite / Copy-Paste)"
     
-    # Palabras clave del Modelo Pharmadvisor
-    kw_cierre_acuerdo = ['acuerdo', 'compromiso', 'acepta', 'iniciar', 'reiniciar', 'aumentar', 'sostener', 'mantener', 'probar', 'prescribira', 'prescribirá', 'formulard']
-    kw_actitud_manejo = ['objecion', 'objeción', 'indiferente', 'esceptico', 'escéptico', 'costo', 'sabor', 'mipres', 'eps', 'cambia', 'prefiere', 'mencion']
-    kw_beneficios_historia = ['beneficio', 'ventaja', 'diferencia', 'estudio', 'evidencia', 'paciente', 'tolerancia', 'adherencia', 'falla de medro', 'alergia', 'aplv']
+    # Palabras clave del Modelo Pharmadvisor (Cierre de Acuerdo / Venta / Compromiso Comercial)
+    kw_cierre_acuerdo = [
+        'acuerdo', 'compromiso', 'acepta', 'iniciar', 'reiniciar', 'aumentar', 'sostener', 'mantener', 
+        'probar', 'prescribira', 'prescribirá', 'formulard', 'pedido', 'millones', 'millos', 'se logró', 
+        'se logro', 'aprobado', 'conciliar', 'gestiono', 'gestionó'
+    ]
+    kw_actitud_manejo = [
+        'objecion', 'objeción', 'indiferente', 'esceptico', 'escéptico', 'costo', 'sabor', 'mipres', 
+        'eps', 'cambia', 'prefiere', 'mencion', 'pqr', 'cartera', 'revisó', 'reviso', 'cotización', 'cotizacion'
+    ]
+    kw_beneficios_historia = [
+        'beneficio', 'ventaja', 'diferencia', 'estudio', 'evidencia', 'paciente', 'tolerancia', 
+        'adherencia', 'falla de medro', 'alergia', 'aplv', 'precio', 'descuento', 'portafolio'
+    ]
+
+    # Detección de cierres negativos o quejas no resueltas
+    if any(k in comentario for k in ['queja', 'bloqueo', 'no alcanza', 'perdieron', 'diferencia quedamos']):
+        return "Baja Calidad (Trámite / Copy-Paste)"
 
     has_cierre = any(k in comentario for k in kw_cierre_acuerdo)
     has_actitud = any(k in comentario for k in kw_actitud_manejo)
     has_beneficio = any(k in comentario for k in kw_beneficios_historia)
 
-    # Nivel 1: Alta Calidad (Persuasión Pharmadvisor - Pasos 4 a 7)
-    if (has_cierre and (has_beneficio or has_actitud)) or (has_actitud and has_cierre):
+    # Nivel 1: Alta Calidad (Persuasión y Cierre de Acuerdo - Pasos 4 a 7 de Pharmadvisor)
+    if (has_cierre and (has_beneficio or has_actitud)) or (has_cierre and any(char.isdigit() for char in comentario)):
         return "Alta Calidad (Persuasión / Cierre de Acuerdo)"
     
-    # Nivel 2: Calidad Media (Presentación Pharmadvisor - Paso 3)
-    elif has_beneficio or has_actitud:
+    # Nivel 2: Calidad Media (Seguimiento / Historia de Beneficios / Gestión)
+    elif has_beneficio or has_actitud or has_cierre:
         return "Calidad Media (Historia de Beneficios)"
     
     # Nivel 3: Baja Calidad (Trámite de Muestras o Sin Propuesta)
@@ -145,14 +159,14 @@ def evaluar_tecnica_pharmadvisor(row, dup_series):
 def normalizar_categoria(val):
     if pd.isna(val): return 'Médico Estándar / Sin Cat.'
     val_str = str(val).strip().upper()
-    if val_str in ['NAN', 'NONE', '', 'NULL']: return 'Médico Estándar / Sin Cat.'
+    if val_str in ['NAN', 'NONE', '', 'NULL', '-']: return 'Médico Estándar / Sin Cat.'
     if 'TOP' in val_str: return 'Médico TOP'
     return 'Médico Estándar / Sin Cat.'
 
 def normalizar_pareto(val):
     if pd.isna(val): return 'Institución No Pareto'
     val_str = str(val).strip().upper()
-    if val_str in ['NAN', 'NONE', '', 'NULL', 'NO', 'FALSE', '0']: return 'Institución No Pareto'
+    if val_str in ['NAN', 'NONE', '', 'NULL', 'NO', 'FALSE', '0', '-']: return 'Institución No Pareto'
     if any(k in val_str for k in ['SI', 'SÍ', 'PARETO', '1', 'TRUE']): return 'Institución Pareto'
     return 'Institución No Pareto'
 
@@ -164,7 +178,23 @@ if uploaded_file is not None:
 
     df_clean = df.drop_duplicates(subset=['Cod. visita']).copy() if 'Cod. visita' in df.columns else df.copy()
 
-    df_clean['Comentario_str'] = df_clean['Comentario'].astype(str).str.strip() if 'Comentario' in df_clean.columns else ""
+    # DETECCIÓN AUTOMÁTICA DEL CAMPO PRINCIPAL DE TEXTO (Comentario vs. Acuerdo Logrado)
+    col_acuerdo_list = [c for c in df_clean.columns if 'acuerdo' in str(c).lower()]
+    col_comentario_list = [c for c in df_clean.columns if 'comentario' in str(c).lower() and 'impacto' not in str(c).lower()]
+    
+    col_acuerdo_name = col_acuerdo_list[0] if col_acuerdo_list else None
+    col_comentario_name = col_comentario_list[0] if col_comentario_list else None
+
+    def extraer_texto_evaluacion(row):
+        acuerdo_val = str(row.get(col_acuerdo_name, '')).strip() if col_acuerdo_name else ''
+        comentario_val = str(row.get(col_comentario_name, '')).strip() if col_comentario_name else ''
+        
+        # Prioridad a 'Acuerdo logrado' si 'Comentario' es nulo, vacio o '-'
+        if (pd.isna(comentario_val) or comentario_val in ['-', '', 'nan', 'None']) and acuerdo_val not in ['-', '', 'nan', 'None']:
+            return acuerdo_val
+        return comentario_val
+
+    df_clean['Comentario_str'] = df_clean.apply(extraer_texto_evaluacion, axis=1)
     df_clean['Objetivo_str'] = df_clean['Objetivo'].astype(str).str.strip() if 'Objetivo' in df_clean.columns else ""
 
     col_cat = 'Categoría' if 'Categoría' in df_clean.columns else ('Categoria' if 'Categoria' in df_clean.columns else None)
@@ -174,25 +204,26 @@ if uploaded_file is not None:
     col_ciclo = [c for c in df_clean.columns if 'ciclo' in c.lower()]
     col_ciclo_name = col_ciclo[0] if col_ciclo else None
 
-    # BÚSQUEDA SEGURA DE COLUMNAS DE MÉDICO Y REPRESENTANTE
-    doc_candidates = [c for c in df_clean.columns if any(k in str(c).lower() for k in ['único', 'unico', 'médico', 'medico', 'cod. médico'])]
+    # BÚSQUEDA SEGURA Y DINÁMICA DE COLUMNAS DE MÉDICO / CLIENTE Y REPRESENTANTE
+    doc_candidates = [c for c in df_clean.columns if any(k in str(c).lower() for k in ['único', 'unico', 'médico', 'medico', 'cliente', 'nombre'])]
     if doc_candidates:
         doc_id_col = doc_candidates[0]
     else:
-        if 'Médico' in df_clean.columns: doc_id_col = 'Médico'
-        elif 'Medico' in df_clean.columns: doc_id_col = 'Medico'
-        else:
-            df_clean['ID_Temp_Medico'] = df_clean.index
-            doc_id_col = 'ID_Temp_Medico'
+        df_clean['ID_Temp_Medico'] = df_clean.index
+        doc_id_col = 'ID_Temp_Medico'
 
     rep_candidates = [c for c in df_clean.columns if any(k in str(c).lower() for k in ['representante', 'visitador', 'rep'])]
     col_rep_name = rep_candidates[0] if rep_candidates else None
+
+    # Búsqueda de Persona Contactada
+    contacto_candidates = [c for c in df_clean.columns if any(k in str(c).lower() for k in ['nombres y apellidos', 'persona visitada', 'contacto'])]
+    col_contacto_name = contacto_candidates[0] if contacto_candidates else doc_id_col
 
     df_clean['Cat_Clean'] = df_clean[col_cat].apply(normalizar_categoria) if col_cat else 'Médico Estándar / Sin Cat.'
     df_clean['Pareto_Clean'] = df_clean[col_pareto_name].apply(normalizar_pareto) if col_pareto_name else 'Institución No Pareto'
 
     # Detección de Duplicados Globales
-    dup_mask = df_clean.duplicated(subset=['Comentario_str'], keep=False) & (df_clean['Comentario_str'] != "")
+    dup_mask = df_clean.duplicated(subset=['Comentario_str'], keep=False) & (df_clean['Comentario_str'] != "") & (df_clean['Comentario_str'] != "-")
     df_clean['Nivel_Tecnica_Ventas'] = df_clean.apply(lambda r: evaluar_tecnica_pharmadvisor(r, dup_mask), axis=1)
 
     # FILTROS GLOBALES EN CASCADA (MULTISELECT)
@@ -227,7 +258,7 @@ if uploaded_file is not None:
 
     with c_f4:
         cat_opt = sorted([str(x) for x in df_step['Cat_Clean'].dropna().unique()])
-        sel_cat = st.multiselect("Categoría Médico", cat_opt)
+        sel_cat = st.multiselect("Categoría Médico / Cliente", cat_opt)
         if sel_cat:
             df_step = df_step[df_step['Cat_Clean'].astype(str).isin(sel_cat)]
 
@@ -250,7 +281,7 @@ if uploaded_file is not None:
     # TARJETAS KPI
     k1, k2, k3, k4 = st.columns(4)
     k1.markdown(f'<div class="kpi-card"><div class="kpi-label">TOTAL VISITAS ÚNICAS</div><div class="kpi-value">{total_visitas:,}</div></div>', unsafe_allow_html=True)
-    k2.markdown(f'<div class="kpi-card"><div class="kpi-label">MÉDICOS CONTACTADOS</div><div class="kpi-value">{medicos:,}</div></div>', unsafe_allow_html=True)
+    k2.markdown(f'<div class="kpi-card"><div class="kpi-label">MÉDICOS / CLIENTES CONTACTADOS</div><div class="kpi-value">{medicos:,}</div></div>', unsafe_allow_html=True)
     color_dup = '#E6007E' if pct_dup > 50 else '#A3FF00'
     k3.markdown(f'<div class="kpi-card"><div class="kpi-label">TASA COPY-PASTE</div><div class="kpi-value" style="color:{color_dup};">{pct_dup:.1f}%</div></div>', unsafe_allow_html=True)
     k4.markdown(f'<div class="kpi-card"><div class="kpi-label">ÍNDICE PERSUASIÓN & ACUERDO</div><div class="kpi-value" style="color:#0088FF;">{pct_alta_calidad}%</div></div>', unsafe_allow_html=True)
@@ -265,7 +296,7 @@ if uploaded_file is not None:
 
     # --- PESTAÑA 1: GERENCIAS REGIONALES ---
     with tab_reg:
-        st.subheader("Auditoría Territorial y Alignment: Médicos TOP vs. Cuentas Pareto")
+        st.subheader("Auditoría Territorial y Alignment: Médicos/Clientes TOP vs. Cuentas Pareto")
         
         r1, r2 = st.columns(2)
         with r1:
@@ -279,7 +310,7 @@ if uploaded_file is not None:
         with r2:
             if col_rep_name:
                 rep_list = [{'Representante': r, '% Copy-Paste': get_copy_paste_rate(grp)} 
-                            for r, grp in df_filtered.groupby(col_rep_name) if len(grp) >= 5]
+                            for r, grp in df_filtered.groupby(col_rep_name) if len(grp) >= 1]
                 rep_df = pd.DataFrame(rep_list).sort_values(by='% Copy-Paste', ascending=False).head(10)
                 fig2 = px.bar(rep_df, x='% Copy-Paste', y='Representante', orientation='h', color='% Copy-Paste',
                               color_continuous_scale=['#0088FF', '#E6007E'], template='plotly_dark', title='<b>2. Top 10 Reps en Alerta Copy-Paste</b>')
@@ -292,9 +323,9 @@ if uploaded_file is not None:
         with p1:
             if total_visitas > 0:
                 doc_cat_df = df_filtered.groupby(doc_id_col)['Cat_Clean'].first().value_counts().reset_index()
-                doc_cat_df.columns = ['Categoría', 'Médicos Únicos']
-                fig_cat_pie = px.pie(doc_cat_df, names='Categoría', values='Médicos Únicos', hole=0.5,
-                                     template='plotly_dark', title='<b>3. Composición del Panel de Médicos Únicos (TOP vs Estándar)</b>',
+                doc_cat_df.columns = ['Categoría', 'Contactos Únicos']
+                fig_cat_pie = px.pie(doc_cat_df, names='Categoría', values='Contactos Únicos', hole=0.5,
+                                     template='plotly_dark', title='<b>3. Composición del Panel de Contactos Únicos (TOP vs Estándar)</b>',
                                      color_discrete_map={'Médico TOP': '#E6007E', 'Médico Estándar / Sin Cat.': '#0088FF'})
                 fig_cat_pie.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=330)
                 st.plotly_chart(fig_cat_pie, use_container_width=True)
@@ -336,7 +367,7 @@ if uploaded_file is not None:
                     y=['Médico TOP', 'Médico Estándar / Sin Cat.'],
                     color_continuous_scale=sem_colorscale,
                     template='plotly_dark',
-                    title='<b>4. Matriz Alignment Semáforo: Ubicación de Médicos TOP</b>'
+                    title='<b>4. Matriz Alignment Semáforo: Ubicación de Contactos TOP</b>'
                 )
 
                 fig_cross.update_traces(
@@ -351,7 +382,7 @@ if uploaded_file is not None:
                     height=330, 
                     coloraxis_showscale=False,
                     xaxis_title="Tipo de Institución",
-                    yaxis_title="Categoría Médico"
+                    yaxis_title="Categoría Contacto"
                 )
                 st.plotly_chart(fig_cross, use_container_width=True)
 
@@ -363,8 +394,8 @@ if uploaded_file is not None:
                     'Línea': grp['Línea'].iloc[0] if 'Línea' in grp.columns else 'N/A',
                     'Representante': r,
                     'Visitas Totales': len(grp),
-                    'Médicos Únicos': grp[doc_id_col].nunique(),
-                    'Médicos TOP': grp[grp['Cat_Clean']=='Médico TOP'][doc_id_col].nunique(),
+                    'Contactos Únicos': grp[doc_id_col].nunique(),
+                    'Contactos TOP': grp[grp['Cat_Clean']=='Médico TOP'][doc_id_col].nunique(),
                     '% Visitas Pareto': round((grp['Pareto_Clean'].value_counts().get('Institución Pareto', 0) / len(grp)) * 100, 1),
                     '% Copy-Paste': get_copy_paste_rate(grp)
                 } for r, grp in df_filtered.groupby(col_rep_name)
@@ -373,7 +404,7 @@ if uploaded_file is not None:
 
     # --- PESTAÑA 2: GERENCIAS DE LÍNEA & TÉCNICA DE VENTAS ---
     with tab_linea:
-        st.subheader("Análisis de Marcas, Share of Voice y Técnica de Ventas (Pharmadvisor 7 Pasos)")
+        st.subheader("Análisis de Marcas, Share of Voice y Técnica de Ventas / Acuerdos (Pharmadvisor)")
         l1, l2 = st.columns(2)
 
         with l1:
@@ -394,7 +425,7 @@ if uploaded_file is not None:
                 color='Nivel de Calidad',
                 color_discrete_map=color_semaforo_map,
                 template='plotly_dark', 
-                title='<b>1. Calidad de Visita (Modelo Pharmadvisor - 7 Pasos)</b>'
+                title='<b>1. Calidad de Visita / Cierre de Acuerdo (Modelo Pharmadvisor)</b>'
             )
             fig_cal.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=350)
             st.plotly_chart(fig_cal, use_container_width=True)
@@ -418,11 +449,11 @@ if uploaded_file is not None:
 
         st.markdown("###")
         themes = {
-            'Beneficios de Producto': 'syneo|pepti|infatrini|fortini|neocate|ketocal',
+            'Gestión Comercial / Pedidos / Montos': 'pedido|millones|millos|aprobado|recaudo|cartera',
+            'Trámites Mipres / EPS / PQR': 'mipres|eps|autorizacion|pqr|devolución|devolucion',
+            'Beneficios de Producto / Portafolio': 'beneficio|ventaja|portafolio|muestra|presentación',
             'Programa Pacientes (PAP)': 'pap|programa|fundacion|fundación',
-            'Trámites Mipres / EPS': 'mipres|eps|autorizacion|autorización|formulacion',
-            'Inicios / Muestras': 'inicio|inicios|muestra|muestras|probando',
-            'Competencia Mencionada': 's-26|s26|similac|nan|althera|nutramigen'
+            'Competencia Mencionada': 's-26|s26|similac|nan|althera|nutramigen|precios'
         }
         theme_data = [{'Eje Temático': t_name, 'Visitas': df_filtered['Comentario_str'].str.contains(t_kw, case=False, na=False).sum()} for t_name, t_kw in themes.items()]
         theme_df = pd.DataFrame(theme_data).sort_values(by='Visitas', ascending=True)
@@ -435,15 +466,14 @@ if uploaded_file is not None:
             color='Visitas', 
             color_continuous_scale=['#263238', '#4DD0E1'], 
             template='plotly_dark',
-            title='<b>3. Ejes Temáticos y Barreras detectadas en Consultorio</b>'
+            title='<b>3. Ejes Temáticos, Gestiones y Barreras detectadas</b>'
         )
         fig4.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=320)
         st.plotly_chart(fig4, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("#### 💬 Módulos de Voz del Médico (Comentarios Reales de Consultorio)")
+        st.markdown("#### 💬 Módulos de Voz del Cliente (Comentarios y Acuerdos Reales)")
         
-        # Corrección dinámica para filtrar comentarios duplicados sin romper por el nombre de la columna Representante
         subset_dup = [col_rep_name, 'Comentario_str'] if col_rep_name else ['Comentario_str']
         comentarios_genuinos = df_filtered[~df_filtered.duplicated(subset=subset_dup, keep=False)].copy()
         
@@ -452,7 +482,7 @@ if uploaded_file is not None:
             filtro_nivel = st.selectbox("Filtrar por Nivel de Calidad Comercial:", 
                                         ["Todos los Comentarios Genuinos", "Alta Calidad (Persuasión / Cierre de Acuerdo)", "Calidad Media (Historia de Beneficios)", "Baja Calidad (Trámite / Copy-Paste)"])
         with c2:
-            kw_input = st.text_input("🔍 Buscar por Palabra Clave (Ej: Mipres, Sabor, Aceptación, Muestra, Competencia, PAP)", "")
+            kw_input = st.text_input("🔍 Buscar por Palabra Clave (Ej: Pedido, Cartera, Mipres, PQR, Competencia, Millones)", "")
 
         comentarios_display = comentarios_genuinos.copy()
         if filtro_nivel != "Todos los Comentarios Genuinos":
@@ -460,16 +490,17 @@ if uploaded_file is not None:
         if kw_input:
             comentarios_display = comentarios_display[comentarios_display['Comentario_str'].str.contains(kw_input, case=False, na=False)]
 
-        cols_vista = ['Línea', 'Especialidad Promocional', col_rep_name, 'Objetivo_str', 'Comentario_str', 'Cat_Clean', 'Pareto_Clean']
+        cols_vista = ['Línea', col_rep_name, doc_id_col, col_contacto_name, 'Objetivo_str', 'Comentario_str', 'Cat_Clean', 'Pareto_Clean']
         cols_presentes = [c for c in cols_vista if c in comentarios_display.columns]
 
-        st.markdown(f"**Se encontraron {len(comentarios_display):,} observaciones cualitativas reales:**")
+        st.markdown(f"**Se encontraron {len(comentarios_display):,} observaciones / acuerdos cualitativos:**")
         st.dataframe(
             comentarios_display[cols_presentes].rename(columns={
                 col_rep_name: 'Representante',
-                'Especialidad Promocional': 'Especialidad Médico',
+                doc_id_col: 'Cliente / Institución',
+                col_contacto_name: 'Persona Contactada',
                 'Objetivo_str': 'Objetivo Registrado',
-                'Comentario_str': 'Comentario Registrado',
+                'Comentario_str': 'Comentario / Acuerdo Logrado',
                 'Cat_Clean': 'Categoría',
                 'Pareto_Clean': 'Institución Pareto'
             }),
@@ -480,7 +511,7 @@ if uploaded_file is not None:
     # --- PESTAÑA 3: HALLAZGOS ESTRATÉGICOS COMPLETOS ---
     with tab_insights:
         st.subheader("💡 Resumen Ejecutivo & Sustentación Cuantitativa Integral (C-Level)")
-        st.caption("Síntesis automática basada en el modelo de Persuasión Pharmadvisor y Alineación SFE.")
+        st.caption("Síntesis automática basada en el modelo de Persuasión y Acuerdos Pharmadvisor.")
 
         cnt_baja_calidad = (df_filtered['Nivel_Tecnica_Ventas'] == "Baja Calidad (Trámite / Copy-Paste)").sum()
         pct_baja_calidad = round((cnt_baja_calidad / total_visitas * 100), 1) if total_visitas > 0 else 0
@@ -492,68 +523,22 @@ if uploaded_file is not None:
         pct_top_in_pareto = round((docs_top_pareto / docs_top) * 100, 1) if docs_top > 0 else 0
         docs_top_no_pareto = docs_top - docs_top_pareto
 
-        prods_dict = {
-            'Fortini': df_filtered['Comentario_str'].str.contains('Fortini', case=False, na=False).sum(),
-            'Infatrini': df_filtered['Comentario_str'].str.contains('Infatrini', case=False, na=False).sum(),
-            'Ketocal': df_filtered['Comentario_str'].str.contains('Ketocal', case=False, na=False).sum(),
-            'Pepti': df_filtered['Comentario_str'].str.contains('Pepti', case=False, na=False).sum(),
-            'Syneo': df_filtered['Comentario_str'].str.contains('Syneo', case=False, na=False).sum(),
-            'Neocate': df_filtered['Comentario_str'].str.contains('Neocate', case=False, na=False).sum(),
-        }
-        tot_menciones_prod = sum(prods_dict.values()) if sum(prods_dict.values()) > 0 else 1
-        pct_fortini = round((prods_dict['Fortini'] / tot_menciones_prod) * 100, 1)
-        pct_infatrini = round((prods_dict['Infatrini'] / tot_menciones_prod) * 100, 1)
-        pct_neocate = round((prods_dict['Neocate'] / tot_menciones_prod) * 100, 1)
-        pct_ketocal = round((prods_dict['Ketocal'] / tot_menciones_prod) * 100, 1)
-
-        cnt_mipres = df_filtered['Comentario_str'].str.contains('mipres|eps|autorizacion|formulacion', case=False, na=False).sum()
+        cnt_mipres = df_filtered['Comentario_str'].str.contains('mipres|eps|autorizacion|formulacion|pqr', case=False, na=False).sum()
         pct_mipres = round((cnt_mipres / total_visitas) * 100, 1) if total_visitas > 0 else 0
-
-        cnt_pap = df_filtered['Comentario_str'].str.contains('pap|programa|fundacion', case=False, na=False).sum()
-        pct_pap = round((cnt_pap / total_visitas) * 100, 1) if total_visitas > 0 else 0
-
-        cnt_comp = df_filtered['Comentario_str'].str.contains('s-26|s26|similac|nan|althera|nutramigen', case=False, na=False).sum()
-        pct_comp = round((cnt_comp / total_visitas) * 100, 1) if total_visitas > 0 else 0
 
         st.markdown(f"""
         <div class="insight-alert">
-            <h4 style="color:#E6007E; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa & Criterio TOP (SFE)</h4>
-            <p>Se auditó un volumen de <b>{total_visitas:,} visitas</b> realizadas a <b>{medicos:,} médicos únicos</b>, encontrando una tasa de duplicidad del <b>{pct_dup}% ({cnt_dup_total:,} visitas copy-paste)</b>.</p>
-            <ul>
-                <li><b>Alineación de Cuentas Clave:</b> Los visitantes declararon a <b>{docs_top:,} médicos como TOP ({pct_top}% del panel)</b>, pero únicamente el <b>{pct_top_in_pareto}% ({docs_top_pareto:,} médicos)</b> pertenecen a Instituciones Pareto.</li>
-                <li><b>Riesgo de Dispersión:</b> Hay <b>{docs_top_no_pareto:,} médicos TOP ({round(100 - pct_top_in_pareto, 1)}%)</b> atendidos en instituciones No Pareto.</li>
-            </ul>
+            <h4 style="color:#E6007E; margin-top:0;">🚨 1. Auditoría de Disciplina Operativa & Cobertura (SFE)</h4>
+            <p>Se auditó un volumen de <b>{total_visitas:,} visitas/gestiones</b> realizadas a <b>{medicos:,} contactos únicos</b>, encontrando una tasa de duplicidad del <b>{pct_dup}% ({cnt_dup_total:,} visitas copy-paste)</b>.</p>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
         <div class="insight-card">
-            <h4 style="color:#0088FF; margin-top:0;">🎯 2. Evaluación Cualitativa de la Técnica de Ventas (Modelo Pharmadvisor)</h4>
-            <p>Bajo la metodología de 7 Pasos y Persuasión, solo <b>{cnt_alta_calidad:,} visitas ({pct_alta_calidad}%)</b> alcanzaron el nivel de <b>Persuasión y Cierre de Acuerdo</b> con compromiso prescriptivo explícito.</p>
+            <h4 style="color:#0088FF; margin-top:0;">🎯 2. Evaluación Cualitativa de Acuerdos (Modelo Pharmadvisor)</h4>
+            <p>Bajo la metodología de Persuasión y Cierre de Acuerdo, un <b>{pct_alta_calidad}% ({cnt_alta_calidad:,} registros)</b> alcanzaron acuerdos comerciales concretos o compromisos de acción inmediata.</p>
             <ul>
-                <li><b>Trámite y Plantilla:</b> Un total de <b>{cnt_baja_calidad:,} visitas ({pct_baja_calidad}%)</b> corresponden a registros repetidos (copy-paste) o trámites sin propuesta comercial.</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown(f"""
-        <div class="insight-success">
-            <h4 style="color:#A3FF00; margin-top:0;">📦 3. Concentración del Share of Voice Verbal por Marca (Marketing)</h4>
-            <p>Sobre un total de <b>{tot_menciones_prod:,} menciones explícitas de producto</b> en las notas de consultorio:</p>
-            <ul>
-                <li><b>Marcas Dominantes:</b> <b>Fortini ({prods_dict['Fortini']:,} menciones - {pct_fortini}%)</b> e <b>Infatrini ({prods_dict['Infatrini']:,} menciones - {pct_infatrini}%)</b> concentran el <b>{round(pct_fortini + pct_infatrini, 1)}% de la conversación verbal</b>.</li>
-                <li><b>Oportunidad Fórmulas Especializadas:</b> <b>Neocate ({prods_dict['Neocate']:,} menciones - {pct_neocate}%)</b> y <b>Ketocal ({prods_dict['Ketocal']:,} menciones - {pct_ketocal}%)</b> muestran baja participación en consultorio.</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown(f"""
-        <div class="insight-card" style="border-left: 5px solid #FFB300;">
-            <h4 style="color:#FFB300; margin-top:0;">💬 4. Mapeo de Barreras en Consultorio y Voz del Médico (Acceso y Competencia)</h4>
-            <ul>
-                <li><b>Barrera de Acceso (Mipres / EPS):</b> Se cita en <b>{cnt_mipres:,} visitas ({pct_mipres}% del total)</b>.</li>
-                <li><b>Habilitador de Adherencia (PAP):</b> El Programa PAP se utiliza en <b>{cnt_pap:,} visitas ({pct_pap}%)</b>.</li>
-                <li><b>Presión Competitiva en Campo:</b> Se detectaron <b>{cnt_comp:,} menciones directas ({pct_comp}%)</b> a marcas competidoras (<i>Similac, Althéra, Nutramigen, S-26</i>).</li>
+                <li><b>Seguimiento y Trámite:</b> Un <b>{pct_baja_calidad}% ({cnt_baja_calidad:,} registros)</b> corresponden a frases vacías, quejas no resueltas o registros duplicados.</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
