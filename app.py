@@ -40,7 +40,7 @@ st.markdown("""
     <div class="ph-header">
         <div>
             <h1 class="ph-title">E Metrics BI Executive</h1>
-            <span style="color: #9AA5B1; font-size: 13px;">Auditoría, Cobertura e Índice de Frecuencia de Visita Médica</span>
+            <span style="color: #9AA5B1; font-size: 13px;">Auditoría, Cobertura, Frecuencia y Análisis por Ranking de Paretización</span>
         </div>
         <div style="text-align: right;">
             <span style="color: #E6007E; font-weight: bold; font-size: 20px;">Pharm<span style="color: #FFFFFF;">ADVISOR</span></span>
@@ -64,6 +64,23 @@ def cargar_datos(uploaded_file=None):
     df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
     df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
     
+    # Función para agrupar en rangos de ranking
+    def bin_ranking(val):
+        try:
+            v = float(val)
+            if v <= 50: return '1. Top 50'
+            elif v <= 200: return '2. 51 - 200'
+            elif v <= 500: return '3. 201 - 500'
+            elif v <= 1000: return '4. 501 - 1000'
+            else: return '5. 1000+'
+        except:
+            return '6. Sin Ranking / No Cruza'
+
+    if 'Ranking GCH' in df.columns:
+        df['Ranking_Bin_GCH'] = df['Ranking GCH'].apply(bin_ranking)
+    if 'Ranking Allergy' in df.columns:
+        df['Ranking_Bin_Allergy'] = df['Ranking Allergy'].apply(bin_ranking)
+        
     return df
 
 uploaded_file = st.sidebar.file_uploader("Cargar Indicador Frecuencia (Excel)", type=["xlsx"])
@@ -74,26 +91,21 @@ if df_frec is not None:
     st.sidebar.markdown("---")
     st.sidebar.subheader("Filtros Comerciales")
 
-    # 1. Distrito
     distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique())
     selected_distritos = st.sidebar.multiselect("Distrito", options=distritos_disponibles, default=distritos_disponibles)
     
-    # Filtrado en cascada para Línea
     df_filtered = df_frec[df_frec['Distrito'].isin(selected_distritos)]
     lineas_disponibles = sorted(df_filtered['Línea'].dropna().unique())
     selected_lineas = st.sidebar.multiselect("Línea", options=lineas_disponibles, default=lineas_disponibles)
     
-    # Filtrado en cascada para Categoría
     df_filtered = df_filtered[df_filtered['Línea'].isin(selected_lineas)]
     categorias_disponibles = sorted(df_filtered['Categoría'].dropna().unique())
     selected_categorias = st.sidebar.multiselect("Categoría del Médico", options=categorias_disponibles, default=categorias_disponibles)
     
-    # Filtrado en cascada para Representante
     df_filtered = df_filtered[df_filtered['Categoría'].isin(selected_categorias)]
     representantes_disponibles = sorted(df_filtered['Representante'].dropna().unique())
     selected_representantes = st.sidebar.multiselect("Representante", options=representantes_disponibles, default=representantes_disponibles)
 
-    # DataFrame final filtrado
     df_final = df_filtered[df_filtered['Representante'].isin(selected_representantes)]
 
     total_medicos_filtrados = len(df_final)
@@ -177,6 +189,43 @@ if df_frec is not None:
 
     with col_freq3:
         st.plotly_chart(grafica_frecuencia_barras(df_final, "<b>Frecuencia Combinada</b>", 'Torta_Comb'), use_container_width=True)
+
+    st.markdown("---")
+
+    # --- SECCIÓN 3: FRECUENCIA PROMEDIO SEGÚN POSICIÓN EN EL RANKING DE PARETIZACIÓN ---
+    st.subheader("Índice de Frecuencia Promedio según Posición en el Ranking de Paretización")
+
+    col_rank1, col_rank2 = st.columns(2)
+
+    def grafica_frecuencia_ranking(df_data, col_bin, titulo):
+        if col_bin not in df_data.columns:
+            return px.line(title=titulo)
+            
+        rank_df = df_data.groupby(col_bin)['Ind Frecuencia médico'].mean().reset_index()
+        rank_df.columns = ['Rango de Ranking', 'Frecuencia Promedio']
+        rank_df = rank_df.sort_values('Rango de Ranking')
+        
+        fig = px.line(
+            rank_df, x='Rango de Ranking', y='Frecuencia Promedio',
+            markers=True, text='Frecuencia Promedio', template='plotly_dark',
+            title=titulo, color_discrete_sequence=['#0088FF']
+        )
+        fig.update_traces(texttemplate='%{text:.2f}', textposition='top center', textfont_size=12, line=dict(width=3))
+        fig.update_layout(
+            paper_bgcolor='#1C202C',
+            plot_bgcolor='#2D3346',
+            height=370,
+            xaxis_title="Rango de Posición en Ranking",
+            yaxis_title="Frecuencia Promedio",
+            margin=dict(t=50, b=50, l=20, r=20)
+        )
+        return fig
+
+    with col_rank1:
+        st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_GCH', "<b>Frecuencia vs Ranking GCH</b>"), use_container_width=True)
+
+    with col_rank2:
+        st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_Allergy', "<b>Frecuencia vs Ranking Allergy</b>"), use_container_width=True)
 
 else:
     st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo a la raíz del repositorio o cárgalo mediante la barra lateral.")
