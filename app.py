@@ -64,7 +64,7 @@ def cargar_datos(uploaded_file=None):
     df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
     df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
     
-    # Función para agrupar en rangos de ranking
+    # Función para agrupar en rangos de ranking de forma robusta
     def bin_ranking(val):
         try:
             v = float(val)
