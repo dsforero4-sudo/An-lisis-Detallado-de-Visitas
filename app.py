@@ -1,45 +1,33 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-
-@st.cache_data
-def cargar_analisis_pareto():
+FileNotFoundError: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
+Traceback:
+File "/mount/src/an-lisis-detallado-de-visitas/app.py", line 16, in <module>
+    df_frec = cargar_analisis_pareto()
+File "/home/adminuser/venv/lib/python3.14/site-packages/streamlit/runtime/caching/cache_utils.py", line 590, in __call__
+    return self._get_or_create_cached_value(args, kwargs, spinner_message)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.14/site-packages/streamlit/runtime/caching/cache_utils.py", line 646, in _get_or_create_cached_value
+    return self._handle_cache_miss(cache, value_key, func_args, func_kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/adminuser/venv/lib/python3.14/site-packages/streamlit/runtime/caching/cache_utils.py", line 708, in _handle_cache_miss
+    computed_value = self._info.func(*func_args, **func_kwargs)
+File "/mount/src/an-lisis-detallado-de-visitas/app.py", line 7, in cargar_analisis_pareto
     df = pd.read_excel('Indicador_frecuencia_medicos.xlsx', sheet_name='Indicador_frecuencia_medico')
-    
-    # Clasificación basada en la columna Pareto 1
-    df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
-    df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
-    df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
-    
-    return df
-
-df_frec = cargar_analisis_pareto()
-
-st.subheader("Distribución de Médicos por Tipo de Clasificación Pareto (Columna Pareto 1)")
-
-col1, col2, col3 = st.columns(3)
-color_map = {'Inst. Pareto': '#0088FF', 'Inst. No Pareto': '#E6007E'}
-
-with col1:
-    counts_gch = df_frec['Torta_GCH'].value_counts().reset_index()
-    counts_gch.columns = ['Categoría', 'Médicos']
-    fig1 = px.pie(counts_gch, names='Categoría', values='Médicos', hole=0.4, title="<b>1. Mercado Growth (GCH)</b>", color='Categoría', color_discrete_map=color_map, template='plotly_dark')
-    fig1.update_traces(textinfo='percent+label', textfont_size=13)
-    fig1.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=340, showlegend=False)
-    st.plotly_chart(fig1, use_container_width=True)
-
-with col2:
-    counts_all = df_frec['Torta_Allergy'].value_counts().reset_index()
-    counts_all.columns = ['Categoría', 'Médicos']
-    fig2 = px.pie(counts_all, names='Categoría', values='Médicos', hole=0.4, title="<b>2. Mercado Allergy</b>", color='Categoría', color_discrete_map=color_map, template='plotly_dark')
-    fig2.update_traces(textinfo='percent+label', textfont_size=13)
-    fig2.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=340, showlegend=False)
-    st.plotly_chart(fig2, use_container_width=True)
-
-with col3:
-    counts_comb = df_frec['Torta_Comb'].value_counts().reset_index()
-    counts_comb.columns = ['Categoría', 'Médicos']
-    fig3 = px.pie(counts_comb, names='Categoría', values='Médicos', hole=0.4, title="<b>3. Mercados Combinados</b>", color='Categoría', color_discrete_map=color_map, template='plotly_dark')
-    fig3.update_traces(textinfo='percent+label', textfont_size=13)
-    fig3.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=340, showlegend=False)
-    st.plotly_chart(fig3, use_container_width=True)
+File "/home/adminuser/venv/lib/python3.14/site-packages/pandas/io/excel/_base.py", line 481, in read_excel
+    io = ExcelFile(
+        io,
+    ...<2 lines>...
+        engine_kwargs=engine_kwargs,
+    )
+File "/home/adminuser/venv/lib/python3.14/site-packages/pandas/io/excel/_base.py", line 1604, in __init__
+    ext = inspect_excel_format(
+        content_or_path=path_or_buffer, storage_options=storage_options
+    )
+File "/home/adminuser/venv/lib/python3.14/site-packages/pandas/io/excel/_base.py", line 1452, in inspect_excel_format
+    with get_handle(
+         ~~~~~~~~~~^
+        content_or_path, "rb", storage_options=storage_options, is_text=False
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ) as handle:
+    ^
+File "/home/adminuser/venv/lib/python3.14/site-packages/pandas/io/common.py", line 939, in get_handle
+    handle = open(handle, ioargs.mode)
