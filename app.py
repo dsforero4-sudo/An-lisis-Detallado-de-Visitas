@@ -227,15 +227,15 @@ if df_frec is not None:
     with col_rank2:
         st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_Allergy', "<b>Frecuencia vs Ranking Allergy</b>"), use_container_width=True)
 
-    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (BUBBLE / TAMAÑO POR FRECUENCIA) ---
+    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (BARRAS LIMPIAS CON % Y MÉDICOS) ---
     st.markdown("---")
-    st.subheader("Análisis por Institución: Tamaño por Frecuencia y Volumen de Médicos")
+    st.subheader("Análisis por Institución: Volumen y Participación de Médicos")
 
     instituciones_disponibles = sorted(df_final['Institución 1.1'].dropna().unique())
     selected_instituciones = st.multiselect(
         "Seleccionar Institución(es) para comparar:",
         options=instituciones_disponibles,
-        default=instituciones_disponibles[:15] if len(instituciones_disponibles) >= 15 else instituciones_disponibles
+        default=instituciones_disponibles[:12] if len(instituciones_disponibles) >= 12 else instituciones_disponibles
     )
 
     if selected_instituciones:
@@ -249,31 +249,31 @@ if df_frec is not None:
         total_sel = inst_summary['Cantidad_Medicos'].sum()
         inst_summary['Porcentaje'] = (inst_summary['Cantidad_Medicos'] / total_sel * 100) if total_sel > 0 else 0
         
-        # Etiqueta combinada: Porcentaje + Número de médicos
+        # Etiqueta limpia: Porcentaje + Número absoluto de médicos
         inst_summary['Etiqueta'] = inst_summary.apply(
             lambda row: f"{row['Porcentaje']:.1f}% ({int(row['Cantidad_Medicos'])})", axis=1
         )
         
         inst_summary = inst_summary.sort_values(by='Cantidad_Medicos', ascending=False)
 
-        fig_bubble = px.scatter(
+        # Gráfica de barras limpia
+        fig_bar = px.bar(
             inst_summary, 
             x='Institución 1.1', 
             y='Cantidad_Medicos',
-            size='Frecuencia_Promedio', 
-            color='Frecuencia_Promedio',
             text='Etiqueta',
-            color_continuous_scale='Bluered',
+            color='Frecuencia_Promedio',
+            color_continuous_scale='Blues',
             template='plotly_dark',
-            title="<b>Instituciones: Volumen de Médicos y Tamaño por Frecuencia de Visita</b>"
+            title="<b>Cantidad y Participación de Médicos por Institución</b>"
         )
         
-        fig_bubble.update_traces(
-            textposition='top center',
-            textfont_size=11
+        fig_bar.update_traces(
+            textposition='outside',
+            textfont_size=12
         )
         
-        fig_bubble.update_layout(
+        fig_bar.update_layout(
             paper_bgcolor='#1C202C',
             plot_bgcolor='#2D3346',
             height=480,
@@ -284,7 +284,7 @@ if df_frec is not None:
             coloraxis_colorbar=dict(title="Freq. Promedio")
         )
         
-        st.plotly_chart(fig_bubble, use_container_width=True)
+        st.plotly_chart(fig_bar, use_container_width=True)
 
         st.markdown("##### Detalle de Frecuencia, Porcentaje y Médicos por Institución")
         inst_summary_display = inst_summary[['Institución 1.1', 'Cantidad_Medicos', 'Porcentaje', 'Frecuencia_Promedio']].copy()
