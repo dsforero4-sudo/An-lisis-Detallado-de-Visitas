@@ -97,15 +97,21 @@ if df_frec is not None:
 
     color_map = {'Inst. Pareto': '#0088FF', 'Inst. No Pareto': '#E6007E'}
 
-    # --- SECCIÓN NUEVA: PROPORCIÓN INSTITUCIONAL VS MÉDICOS ---
+    # Función segura para asegurar integridad de categorías en Plotly
+    def asegurar_categorias(df_grouped, col_name, val_col):
+        categorias_base = pd.DataFrame({'Clasificación': ['Inst. Pareto', 'Inst. No Pareto']})
+        merged = pd.merge(categorias_base, df_grouped, on='Clasificación', how='left').fillna({val_col: 0})
+        return merged
+
+    # --- SECCIÓN: PROPORCIÓN INSTITUCIONAL VS MÉDICOS ---
     st.subheader("Análisis Proporcional: Peso de Instituciones vs. Volumen de Médicos")
 
     col_prop1, col_prop2 = st.columns(2)
 
     with col_prop1:
-        # Calcular instituciones únicas por categoría combinada
         inst_prop = df_final.groupby('Torta_Comb')['Institución 1.1'].nunique().reset_index()
         inst_prop.columns = ['Clasificación', 'Cantidad Instituciones']
+        inst_prop = asegurar_categorias(inst_prop, 'Clasificación', 'Cantidad Instituciones')
         
         fig_inst = px.pie(
             inst_prop, names='Clasificación', values='Cantidad Instituciones', hole=0.5,
@@ -118,11 +124,9 @@ if df_frec is not None:
         st.plotly_chart(fig_inst, use_container_width=True)
 
     with col_prop2:
-        # Frecuencia ponderada o comparativa por peso institucional
-        freq_inst = df_final.groupby('Torta_Comb').agg(
-            Frecuencia_Promedio=('Ind Frecuencia médico', 'mean'),
-            Total_Medicos=('Código', 'count')
-        ).reset_index()
+        freq_inst = df_final.groupby('Torta_Comb')['Ind Frecuencia médico'].mean().reset_index()
+        freq_inst.columns = ['Clasificación', 'Frecuencia_Promedio']
+        freq_inst = asegurar_categorias(freq_inst, 'Clasificación', 'Frecuencia_Promedio')
         
         fig_freq_peso = px.bar(
             freq_inst, x='Clasificación', y='Frecuencia_Promedio',
@@ -145,6 +149,7 @@ if df_frec is not None:
     def grafica_frecuencia_barras(df_data, titulo, col_cat):
         freq_df = df_data.groupby(col_cat)['Ind Frecuencia médico'].mean().reset_index()
         freq_df.columns = ['Clasificación', 'Frecuencia Promedio']
+        freq_df = asegurar_categorias(freq_df, 'Clasificación', 'Frecuencia Promedio')
         
         fig = px.bar(
             freq_df, x='Clasificación', y='Frecuencia Promedio',
