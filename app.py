@@ -48,16 +48,12 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Carga segura con alternativa de uploader si no está el archivo en el repo
+# Carga segura
 @st.cache_data
 def cargar_analisis_pareto(uploaded_file=None):
-    if uploaded_file is not None:
-        excel_source = uploaded_file
-    else:
-        excel_path = 'Indicador_frecuencia_medicos.xlsx'
-        if not os.path.exists(excel_path):
-            return None
-        excel_source = excel_path
+    excel_source = uploaded_file if uploaded_file is not None else 'Indicador_frecuencia_medicos.xlsx'
+    if not os.path.exists(excel_path := 'Indicador_frecuencia_medicos.xlsx') and uploaded_file is None:
+        return None
 
     xls = pd.ExcelFile(excel_source)
     sheet_name = xls.sheet_names[0]
@@ -70,9 +66,7 @@ def cargar_analisis_pareto(uploaded_file=None):
     
     return df
 
-# Panel lateral para carga manual de respaldo si el archivo no está en GitHub
 uploaded_file = st.sidebar.file_uploader("Cargar Indicador Frecuencia (Excel)", type=["xlsx"])
-
 df_frec = cargar_analisis_pareto(uploaded_file)
 
 if df_frec is not None:
@@ -81,40 +75,41 @@ if df_frec is not None:
     col1, col2, col3 = st.columns(3)
     color_map = {'Inst. Pareto': '#0088FF', 'Inst. No Pareto': '#E6007E'}
 
+    def estilizar_grafica(df_data, titulo):
+        fig = px.pie(
+            df_data, names='Categoría', values='Médicos', hole=0.5,
+            title=titulo, color='Categoría', color_discrete_map=color_map, template='plotly_dark'
+        )
+        # Forzar texto horizontal, claro y legible sin inclinaciones
+        fig.update_traces(
+            textinfo='percent+label',
+            textposition='inside',
+            insidetextorientation='horizontal',
+            textfont_size=13
+        )
+        fig.update_layout(
+            paper_bgcolor='#1C202C', 
+            plot_bgcolor='#2D3346', 
+            height=380, 
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+            margin=dict(t=50, b=50, l=20, r=20)
+        )
+        return fig
+
     with col1:
         counts_gch = df_frec['Torta_GCH'].value_counts().reset_index()
         counts_gch.columns = ['Categoría', 'Médicos']
-        fig1 = px.pie(
-            counts_gch, names='Categoría', values='Médicos', hole=0.4,
-            title="<b>1. Mercado Growth (GCH)</b>",
-            color='Categoría', color_discrete_map=color_map, template='plotly_dark'
-        )
-        fig1.update_traces(textinfo='percent+label', textfont_size=13)
-        fig1.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=360, showlegend=False)
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(estilizar_grafica(counts_gch, "<b>1. Mercado Growth (GCH)</b>"), use_container_width=True)
 
     with col2:
         counts_all = df_frec['Torta_Allergy'].value_counts().reset_index()
         counts_all.columns = ['Categoría', 'Médicos']
-        fig2 = px.pie(
-            counts_all, names='Categoría', values='Médicos', hole=0.4,
-            title="<b>2. Mercado Allergy</b>",
-            color='Categoría', color_discrete_map=color_map, template='plotly_dark'
-        )
-        fig2.update_traces(textinfo='percent+label', textfont_size=13)
-        fig2.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=360, showlegend=False)
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(estilizar_grafica(counts_all, "<b>2. Mercado Allergy</b>"), use_container_width=True)
 
     with col3:
         counts_comb = df_frec['Torta_Comb'].value_counts().reset_index()
         counts_comb.columns = ['Categoría', 'Médicos']
-        fig3 = px.pie(
-            counts_comb, names='Categoría', values='Médicos', hole=0.4,
-            title="<b>3. Mercados Combinados</b>",
-            color='Categoría', color_discrete_map=color_map, template='plotly_dark'
-        )
-        fig3.update_traces(textinfo='percent+label', textfont_size=13)
-        fig3.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=360, showlegend=False)
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(estilizar_grafica(counts_comb, "<b>3. Mercados Combinados</b>"), use_container_width=True)
 else:
-    st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx' en el repositorio de GitHub. Por favor, súbelo a la raíz de tu proyecto o cárgalo manualmente usando el selector de archivos en la barra lateral.")
+    st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo a la raíz del repositorio o cárgalo en la barra lateral.")
