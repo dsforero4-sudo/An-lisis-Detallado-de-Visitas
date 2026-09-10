@@ -40,7 +40,7 @@ st.markdown("""
     <div class="ph-header">
         <div>
             <h1 class="ph-title">E Metrics BI Executive</h1>
-            <span style="color: #9AA5B1; font-size: 13px;">Auditoría y Cobertura de Visita Médica - Pareto Institutional</span>
+            <span style="color: #9AA5B1; font-size: 13px;">Auditoría, Cobertura e Índice de Frecuencia de Visita Médica</span>
         </div>
         <div style="text-align: right;">
             <span style="color: #E6007E; font-weight: bold; font-size: 20px;">Pharm<span style="color: #FFFFFF;">ADVISOR</span></span>
@@ -96,37 +96,35 @@ if df_frec is not None:
     # DataFrame final filtrado
     df_final = df_filtered[df_filtered['Representante'].isin(selected_representantes)]
 
-    # Métrica de médicos totales en el panel filtrado
     total_medicos_filtrados = len(df_final)
     st.markdown(f"<span style='color: #9AA5B1; font-size: 15px;'>Mostrando análisis para <b>{total_medicos_filtrados:,}</b> registros médicos seleccionados.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
+    # --- SECCIÓN 1: DISTRIBUCIÓN POR TIPO DE INSTITUCIÓN (DONAS) ---
     st.subheader("Distribución de Médicos por Tipo de Clasificación Institucional (Pareto vs. No Pareto)")
 
     col1, col2, col3 = st.columns(3)
     color_map = {'Inst. Pareto': '#0088FF', 'Inst. No Pareto': '#E6007E'}
 
-    def estilizar_grafica_con_cantidad(df_data, titulo):
-        # Agrupar sumando cantidades explícitas para graficar porcentaje + valor absoluto
-        grouped = df_data.groupby('Categoría')['Médicos'].sum().reset_index()
-        total = grouped['Médicos'].sum()
+    def estilizar_grafica_con_cantidad(df_data, titulo, col_categoria):
+        grouped = df_data.groupby(col_categoria)['Código'].count().reset_index()
+        grouped.columns = ['Categoría', 'Médicos']
         
         fig = px.pie(
             grouped, names='Categoría', values='Médicos', hole=0.5,
             title=titulo, color='Categoría', color_discrete_map=color_map, template='plotly_dark'
         )
         
-        # Mostrar porcentaje y cantidad de médicos claramente de forma horizontal
         fig.update_traces(
             textinfo='percent+value',
             textposition='inside',
             insidetextorientation='horizontal',
-            textfont_size=13
+            textfont_size=12
         )
         fig.update_layout(
             paper_bgcolor='#1C202C', 
             plot_bgcolor='#2D3346', 
-            height=390, 
+            height=370, 
             showlegend=True,
             legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
             margin=dict(t=50, b=60, l=20, r=20)
@@ -134,18 +132,52 @@ if df_frec is not None:
         return fig
 
     with col1:
-        counts_gch = df_final['Torta_GCH'].value_counts().reset_index()
-        counts_gch.columns = ['Categoría', 'Médicos']
-        st.plotly_chart(estilizar_grafica_con_cantidad(counts_gch, "<b>1. Mercado Growth (GCH)</b>"), use_container_width=True)
+        st.plotly_chart(estilizar_grafica_con_cantidad(df_final, "<b>1. Mercado Growth (GCH)</b>", 'Torta_GCH'), use_container_width=True)
 
     with col2:
-        counts_all = df_final['Torta_Allergy'].value_counts().reset_index()
-        counts_all.columns = ['Categoría', 'Médicos']
-        st.plotly_chart(estilizar_grafica_con_cantidad(counts_all, "<b>2. Mercado Allergy</b>"), use_container_width=True)
+        st.plotly_chart(estilizar_grafica_con_cantidad(df_final, "<b>2. Mercado Allergy</b>", 'Torta_Allergy'), use_container_width=True)
 
     with col3:
-        counts_comb = df_final['Torta_Comb'].value_counts().reset_index()
-        counts_comb.columns = ['Categoría', 'Médicos']
-        st.plotly_chart(estilizar_grafica_con_cantidad(counts_comb, "<b>3. Mercados Combinados</b>"), use_container_width=True)
+        st.plotly_chart(estilizar_grafica_con_cantidad(df_final, "<b>3. Mercados Combinados</b>", 'Torta_Comb'), use_container_width=True)
+
+    st.markdown("---")
+
+    # --- SECCIÓN 2: ÍNDICE DE FRECUENCIA PROMEDIO (BARRAS) ---
+    st.subheader("Índice de Frecuencia Promedio de Visita: Pareto vs No Pareto")
+
+    col_freq1, col_freq2, col_freq3 = st.columns(3)
+
+    def grafica_frecuencia_barras(df_data, titulo, col_cat):
+        # Calcular promedio del indicador de frecuencia
+        freq_df = df_data.groupby(col_cat)['Ind Frecuencia médico'].mean().reset_index()
+        freq_df.columns = ['Clasificación', 'Frecuencia Promedio']
+        
+        fig = px.bar(
+            freq_df, x='Clasificación', y='Frecuencia Promedio',
+            text='Frecuencia Promedio', color='Clasificación',
+            color_discrete_map=color_map, template='plotly_dark',
+            title=titulo
+        )
+        fig.update_traces(texttemplate='%{text:.2f}', textposition='outside', textfont_size=13)
+        fig.update_layout(
+            paper_bgcolor='#1C202C',
+            plot_bgcolor='#2D3346',
+            height=340,
+            showlegend=False,
+            xaxis_title="",
+            yaxis_title="Índice Promedio",
+            margin=dict(t=50, b=30, l=20, r=20)
+        )
+        return fig
+
+    with col_freq1:
+        st.plotly_chart(grafica_frecuencia_barras(df_final, "<b>Frecuencia GCH</b>", 'Torta_GCH'), use_container_width=True)
+
+    with col_freq2:
+        st.plotly_chart(grafica_frecuencia_barras(df_final, "<b>Frecuencia Allergy</b>", 'Torta_Allergy'), use_container_width=True)
+
+    with col_freq3:
+        st.plotly_chart(grafica_frecuencia_barras(df_final, "<b>Frecuencia Combinada</b>", 'Torta_Comb'), use_container_width=True)
+
 else:
-    st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx' en el repositorio. Súbelo a la raíz de tu proyecto o cárgalo mediante la barra lateral.")
+    st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo a la raíz del repositorio o cárgalo mediante la barra lateral.")
