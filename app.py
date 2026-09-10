@@ -227,9 +227,9 @@ if df_frec is not None:
     with col_rank2:
         st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_Allergy', "<b>Frecuencia vs Ranking Allergy</b>"), use_container_width=True)
 
-    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (BARRAS LIMPIAS CON % Y MÉDICOS) ---
+    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (FRECUENCIA EN EJE Y) ---
     st.markdown("---")
-    st.subheader("Análisis por Institución: Volumen y Participación de Médicos")
+    st.subheader("Análisis por Institución: Frecuencia Promedio de Visita")
 
     instituciones_disponibles = sorted(df_final['Institución 1.1'].dropna().unique())
     selected_instituciones = st.multiselect(
@@ -249,48 +249,49 @@ if df_frec is not None:
         total_sel = inst_summary['Cantidad_Medicos'].sum()
         inst_summary['Porcentaje'] = (inst_summary['Cantidad_Medicos'] / total_sel * 100) if total_sel > 0 else 0
         
-        # Etiqueta limpia: Porcentaje + Número absoluto de médicos
+        # Etiqueta detallada en la barra: Frecuencia exacta + Porcentaje + Médicos
         inst_summary['Etiqueta'] = inst_summary.apply(
-            lambda row: f"{row['Porcentaje']:.1f}% ({int(row['Cantidad_Medicos'])})", axis=1
+            lambda row: f"{row['Frecuencia_Promedio']:.2f} | {row['Porcentaje']:.1f}% ({int(row['Cantidad_Medicos'])})", axis=1
         )
         
-        inst_summary = inst_summary.sort_values(by='Cantidad_Medicos', ascending=False)
+        # Ordenar de mayor a menor frecuencia para mejor lectura visual
+        inst_summary = inst_summary.sort_values(by='Frecuencia_Promedio', ascending=False)
 
-        # Gráfica de barras limpia
+        # Gráfica de barras con la Frecuencia en el Eje Y
         fig_bar = px.bar(
             inst_summary, 
             x='Institución 1.1', 
-            y='Cantidad_Medicos',
+            y='Frecuencia_Promedio',
             text='Etiqueta',
-            color='Frecuencia_Promedio',
+            color='Cantidad_Medicos',
             color_continuous_scale='Blues',
             template='plotly_dark',
-            title="<b>Cantidad y Participación de Médicos por Institución</b>"
+            title="<b>Índice de Frecuencia Promedio por Institución</b>"
         )
         
         fig_bar.update_traces(
             textposition='outside',
-            textfont_size=12
+            textfont_size=11
         )
         
         fig_bar.update_layout(
             paper_bgcolor='#1C202C',
             plot_bgcolor='#2D3346',
-            height=480,
+            height=500,
             xaxis_title="Institución",
-            yaxis_title="Cantidad de Médicos",
+            yaxis_title="Índice de Frecuencia Promedio",
             xaxis={'tickangle': -35},
-            margin=dict(t=60, b=120, l=40, r=20),
-            coloraxis_colorbar=dict(title="Freq. Promedio")
+            margin=dict(t=60, b=130, l=40, r=20),
+            coloraxis_colorbar=dict(title="Cant. Médicos")
         )
         
         st.plotly_chart(fig_bar, use_container_width=True)
 
         st.markdown("##### Detalle de Frecuencia, Porcentaje y Médicos por Institución")
-        inst_summary_display = inst_summary[['Institución 1.1', 'Cantidad_Medicos', 'Porcentaje', 'Frecuencia_Promedio']].copy()
-        inst_summary_display.columns = ['Institución', 'Cantidad de Médicos', '% del Total', 'Frecuencia Promedio']
-        inst_summary_display['% del Total'] = inst_summary_display['% del Total'].round(1).astype(str) + '%'
+        inst_summary_display = inst_summary[['Institución 1.1', 'Frecuencia_Promedio', 'Cantidad_Medicos', 'Porcentaje']].copy()
+        inst_summary_display.columns = ['Institución', 'Frecuencia Promedio', 'Cantidad de Médicos', '% del Total']
         inst_summary_display['Frecuencia Promedio'] = inst_summary_display['Frecuencia Promedio'].round(2)
+        inst_summary_display['% del Total'] = inst_summary_display['% del Total'].round(1).astype(str) + '%'
         st.dataframe(inst_summary_display, use_container_width=True, hide_index=True)
     else:
         st.info("ℹ️ Por favor selecciona al menos una institución en el filtro superior para visualizar la comparativa.")
