@@ -227,7 +227,7 @@ if df_frec is not None:
     with col_rank2:
         st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_Allergy', "<b>Frecuencia vs Ranking Allergy</b>"), use_container_width=True)
 
-    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (FRECUENCIA EN EJE Y) ---
+    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (ETIQUETAS DENTRO DE LA BARRA) ---
     st.markdown("---")
     st.subheader("Análisis por Institución: Frecuencia Promedio de Visita")
 
@@ -249,29 +249,30 @@ if df_frec is not None:
         total_sel = inst_summary['Cantidad_Medicos'].sum()
         inst_summary['Porcentaje'] = (inst_summary['Cantidad_Medicos'] / total_sel * 100) if total_sel > 0 else 0
         
-        # Etiqueta detallada en la barra: Frecuencia exacta + Porcentaje + Médicos
+        # Etiqueta clara dentro de la barra: Porcentaje + Número absoluto de médicos
         inst_summary['Etiqueta'] = inst_summary.apply(
-            lambda row: f"{row['Frecuencia_Promedio']:.2f} | {row['Porcentaje']:.1f}% ({int(row['Cantidad_Medicos'])})", axis=1
+            lambda row: f"{row['Porcentaje']:.1f}% ({int(row['Cantidad_Medicos'])})", axis=1
         )
         
         # Ordenar de mayor a menor frecuencia para mejor lectura visual
         inst_summary = inst_summary.sort_values(by='Frecuencia_Promedio', ascending=False)
 
-        # Gráfica de barras con la Frecuencia en el Eje Y
+        # Gráfica de barras con color uniforme y etiquetas dentro
         fig_bar = px.bar(
             inst_summary, 
             x='Institución 1.1', 
             y='Frecuencia_Promedio',
             text='Etiqueta',
-            color='Cantidad_Medicos',
-            color_continuous_scale='Blues',
             template='plotly_dark',
-            title="<b>Índice de Frecuencia Promedio por Institución</b>"
+            title="<b>Índice de Frecuencia Promedio por Institución</b>",
+            color_discrete_sequence=['#0088FF']
         )
         
         fig_bar.update_traces(
-            textposition='outside',
-            textfont_size=11
+            textposition='inside',
+            insidetextorientation='radial',
+            textfont_size=11,
+            textfont_color='white'
         )
         
         fig_bar.update_layout(
@@ -282,7 +283,7 @@ if df_frec is not None:
             yaxis_title="Índice de Frecuencia Promedio",
             xaxis={'tickangle': -35},
             margin=dict(t=60, b=130, l=40, r=20),
-            coloraxis_colorbar=dict(title="Cant. Médicos")
+            showlegend=False
         )
         
         st.plotly_chart(fig_bar, use_container_width=True)
