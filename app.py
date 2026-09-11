@@ -56,6 +56,10 @@ def cargar_datos_mipres(uploaded_file=None):
         return None
     try:
         df = pd.read_excel(source, sheet_name='Consolidado', header=1)
+        if 'Total general' in df.columns:
+            df['Total general'] = pd.to_numeric(df['Total general'], errors='coerce')
+        if '2026' in df.columns:
+            df['2026'] = pd.to_numeric(df['2026'], errors='coerce')
         return df
     except Exception as e:
         return None
@@ -119,7 +123,7 @@ with tab_mipres:
         
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
-        total_vol_2026 = df_mipres_filtered['2026'].sum() if '2026' in df_mipres_filtered.columns else 0
+        total_vol_2026 = df_mipres_filtered['2026'].sum(skipna=True) if '2026' in df_mipres_filtered.columns else 0
         total_instituciones = len(df_mipres_filtered)
         
         kpi1, kpi2, kpi3 = st.columns(3)
@@ -130,7 +134,7 @@ with tab_mipres:
         st.subheader("Oportunidades Comerciales: Instituciones de Alto Volumen sin Visita Comercial")
         
         if 'Se visita Growth?' in df_mipres_filtered.columns and 'Total general' in df_mipres_filtered.columns:
-            df_oportunidades = df_mipres_filtered.sort_values(by='Total general', ascending=False).head(15)
+            df_oportunidades = df_mipres_filtered.sort_values(by='Total general', ascending=False, na_position='last').head(15)
             
             fig_mipres = px.bar(
                 df_oportunidades,
