@@ -56,8 +56,11 @@ def cargar_datos_mipres(uploaded_file=None):
         return None
     try:
         df = pd.read_excel(source, sheet_name='Consolidado', header=1)
+        # Convertir nombres de columnas a string para evitar conflictos de tipo int vs str
+        df.columns = [str(c) for c in df.columns]
+        
         for col in df.columns:
-            if '2025' in str(col) or '2026' in str(col) or 'Total general' in str(col):
+            if '2025' in col or '2026' in col or 'Total general' in col:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         return df
     except Exception as e:
