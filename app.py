@@ -94,13 +94,10 @@ def cargar_datos_frecuencia(uploaded_file=None):
     try:
         xls = pd.ExcelFile(excel_source)
         df = pd.read_excel(excel_source, sheet_name=xls.sheet_names[0])
-        
-        # Identificar o estandarizar columnas de torta de paretización
         if 'Pareto 1' in df.columns:
             df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
             df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
             df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
-            
         return df
     except Exception as e:
         return None
@@ -279,10 +276,10 @@ with tab_mipres:
         st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante el segundo cargador en la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (INDICADOR DE FRECUENCIA)
+# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (FRECUENCIA VS PARETIZACIÓN)
 # =========================================================================
 with tab_visitas:
-    st.subheader("Auditoría Comercial y Frecuencia de Visita (Indicador de Frecuencia)")
+    st.subheader("Auditoría Comercial y Frecuencia a la Luz de la Paretización")
     if df_frec is not None:
         distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique()) if 'Distrito' in df_frec.columns else []
         selected_distritos = st.sidebar.multiselect("Distrito (Pestaña 2)", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
@@ -313,35 +310,28 @@ with tab_visitas:
             st.plotly_chart(estilizar_grafica_con_cantidad(df_filtered, "<b>3. Mercados Combinados</b>", 'Torta_Comb'), use_container_width=True)
 
         st.markdown("---")
-        st.subheader("📊 Indicador de Frecuencia por Médico y Distrito")
+        st.subheader("📊 Indicador de Frecuencia por Médico a la Luz de la Paretización Institucional")
         
-        # Búsqueda inteligente de la columna del indicador de frecuencia por médico en el archivo de frecuencia
+        # Búsqueda de la columna de frecuencia por médico y cruce con Pareto 1
         possible_freq_cols = [c for c in df_filtered.columns if any(w in str(c).lower() for w in ['frecuencia', 'indicador', 'visita', 'veces'])]
         freq_col = possible_freq_cols[0] if possible_freq_cols else None
         
-        if freq_col and 'Distrito' in df_filtered.columns:
-            df_frec_medico = df_filtered.groupby('Distrito')[freq_col].mean().reset_index()
-            df_frec_medico.columns = ['Distrito', 'Promedio_Frecuencia']
+        if freq_col and 'Pareto 1' in df_filtered.columns and 'Distrito' in df_filtered.columns:
+            # Agrupar por Distrito y Categoria Pareto para comparar el indicador de frecuencia
+            df_cruce_pareto = df_filtered.groupby(['Distrito', 'Pareto 1'])[freq_col].mean().reset_index()
+            df_cruce_pareto.columns = ['Distrito', 'Clasificación Pareto', 'Promedio_Frecuencia']
             
-            fig_freq = px.bar(
-                df_frec_medico, x='Distrito', y='Promedio_Frecuencia', text='Promedio_Frecuencia',
-                template='plotly_dark', title=f"<b>Promedio del Indicador de Frecuencia ({freq_col}) por Distrito</b>",
-                color='Promedio_Frecuencia', color_continuous_scale=['#0088FF', '#E6007E']
+            fig_cruce_p = px.bar(
+                df_cruce_pareto, x='Distrito', y='Promedio_Frecuencia', color='Clasificación Pareto', barmode='group',
+                text='Promedio_Frecuencia', template='plotly_dark',
+                title=f"<b>Comparativa del Indicador de Frecuencia ({freq_col}) por Distrito y Pareto Institucional</b>",
+                color_discrete_sequence=['#0088FF', '#E6007E', '#FFC107', '#2ECC71']
             )
-            fig_freq.update_traces(texttemplate='%{text:,.2f}', textposition='outside', textfont_size=11)
-            fig_freq.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, xaxis={'tickangle': -30}, yaxis_title="Promedio Frecuencia por Médico", margin=dict(t=50, b=80, l=40, r=20))
-            st.plotly_chart(fig_freq, use_container_width=True)
+            fig_cruce_p.update_traces(texttemplate='%{text:,.2f}', textposition='outside', textfont_size=10)
+            fig_cruce_p.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=500, xaxis={'tickangle': -30}, yaxis_title="Promedio Frecuencia por Médico", margin=dict(t=50, b=90, l=40, r=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            st.plotly_chart(fig_cruce_p, use_container_width=True)
         else:
-            # Si no encuentra una columna explícita, graficamos el conteo de médicos con frecuencia asignada por distrito
-            df_conteo_medicos = df_filtered.groupby('Distrito').size().reset_index(name='Total_Medicos')
-            fig_med = px.bar(
-                df_conteo_medicos, x='Distrito', y='Total_Medicos', text='Total_Medicos',
-                template='plotly_dark', title="<b>Total de Médicos en Listado de Frecuencia por Distrito</b>",
-                color='Total_Medicos', color_continuous_scale=['#0088FF', '#E6007E']
-            )
-            fig_med.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
-            fig_med.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, xaxis={'tickangle': -30}, yaxis_title="Total Médicos", margin=dict(t=50, b=80, l=40, r=20))
-            st.plotly_chart(fig_med, use_container_width=True)
+            st.info("⚠️ No se encontró la columna exacta de indicador de frecuencia combinada con Pareto 1 en este archivo, pero los datos generales están disponibles.")
     else:
         st.warning("⚠️ Por favor carga el archivo **Indicador Frecuencia** en el primer cargador de la barra lateral.")
 
