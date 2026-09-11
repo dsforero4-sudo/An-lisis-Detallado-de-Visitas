@@ -105,6 +105,22 @@ def cargar_datos_detallado(uploaded_file=None):
     try:
         xls = pd.ExcelFile(excel_source)
         df = pd.read_excel(excel_source, sheet_name=xls.sheet_names[0])
+        
+        # Categorizar ejes temáticos para la gráfica
+        def categorize_comment(text):
+            text = str(text).lower()
+            if any(w in text for w in ['pap', 'programa', 'siempre juntos', 'fundem', 'pacientes']):
+                return 'Programa Pacientes (PAP)'
+            elif any(w in text for w in ['mipres', 'eps', 'regulacion', 'invima', 'autorizacion', 'tramite']):
+                return 'Trámites Mipres / EPS'
+            elif any(w in text for w in ['muestra', 'inicio', 'muestras', 'iniciar']):
+                return 'Inicio / Muestras'
+            elif any(w in text for w in ['competencia', 'otro producto', 'comparacion']):
+                return 'Competencia Mencionada'
+            else:
+                return 'Beneficios de Producto'
+                
+        df['Eje_Tematico'] = df['Comentario'].apply(categorize_comment)
         return df
     except Exception as e:
         return None
@@ -292,15 +308,15 @@ with tab_visitas:
         st.warning("⚠️ Por favor carga el archivo 'Indicador Frecuencia' en el primer cargador de la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (BARRAS = NIVEL DE COPY-PASTE)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (FILTROS EN CASCADA + GRÁFICAS CLAVE)
 # =========================================================================
 with tab_cualitativa:
-    st.subheader("🔎 Auditoría Cualitativa: Detección de Copy-Paste y Rendimiento por Coordinación")
-    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) para mostrar el nivel de copy-paste en las barras, con filtros en cascada y comparativa de coordinaciones.</span>", unsafe_allow_html=True)
+    st.subheader("🔎 Auditoría Cualitativa: Copy-Paste, Share of Voice y Ejes Temáticos")
+    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) con filtros en cascada, nivel de copy-paste, menciones por producto y ejes temáticos en consultorio.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     if df_det is not None:
-        if all(col in df_det.columns for col in ['Región', 'Línea', 'Representante', 'Pareto institución', 'Comentario', 'Cod. visita']):
+        if all(col in df_det.columns for col in ['Región', 'Línea', 'Representante', 'Pareto institución', 'Comentario', 'Cod. visita', 'Impactos']):
             
             # --- FILTROS EN CASCADA EN LA BARRA LATERAL ---
             st.sidebar.markdown("---")
@@ -322,13 +338,13 @@ with tab_cualitativa:
             selected_pareto_q = st.sidebar.multiselect("Pareto Institución", options=pareto_q, default=pareto_q, key="q_par")
             df_filtered_raw = df_q3[df_q3['Pareto institución'].isin(selected_pareto_q)]
 
-            # CONSOLIDAR POR VISITA ÚNICA (Cod. visita)
+            # CONSOLIDAR POR VISITA ÚNICA PARA COPY-PASTE
             df_filtered_q = df_filtered_raw.drop_duplicates(subset=['Cod. visita']).copy()
             df_filtered_q['Comentario_Clean'] = df_filtered_q['Comentario'].astype(str).str.strip().str.lower()
             df_filtered_q['Comentario_Clean'] = df_filtered_q['Comentario_Clean'].apply(lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', x)))
             
-            # --- GRÁFICA 1: COMPARATIVA DE LAS 4 COORDINACIONES (Barras = % Copy-Paste) ---
-            st.subheader("📊 Comparativa General de las 4 Coordinaciones (Nivel de Copy-Paste)")
+            # --- GRÁFICA 1: COMPARATIVA DE LAS 4 COORDINACIONES (% COPY-PASTE) ---
+            st.subheader("📊 1. Comparativa General de las 4 Coordinaciones (Nivel de Copy-Paste)")
             
             coord_summary = df_det.drop_duplicates(subset=['Cod. visita']).copy()
             coord_summary['Comentario_Clean'] = coord_summary['Comentario'].astype(str).str.strip().str.lower()
@@ -346,8 +362,42 @@ with tab_cualitativa:
                 color='Pct_CopyPaste', color_continuous_scale=['#0088FF', '#E6007E']
             )
             fig_coord.update_traces(texttemplate='%{text:.1f}%', textposition='outside', textfont_size=12)
-            fig_coord.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, yaxis_title="% de Copy-Paste", margin=dict(t=50, b=40, l=40, r=20))
+            fig_coord.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=420, yaxis_title="% de Copy-Paste", margin=dict(t=50, b=40, l=40, r=20))
             st.plotly_chart(fig_coord, use_container_width=True)
+
+            st.markdown("---")
+            
+            # --- GRÁFICA 2: MENCIONES POR PRODUCTO (SHARE OF VOICE) ---
+            st.subheader("📊 2. Menciones por Producto (Share of Voice)")
+            # Usamos df_filtered_raw (todas las filas) para contar impactos/productos correctamente
+            df_impactos = df_filtered_raw[df_filtered_raw['Impactos'].astype(str).str.strip() != '-']
+            sov_counts = df_impactos['Impactos'].value_counts().reset_index()
+            sov_counts.columns = ['Producto', 'Visitas']
+
+            fig_sov = px.bar(
+                sov_counts, x='Producto', y='Visitas', text='Visitas',
+                template='plotly_dark', title="<b>Share of Voice por Producto (Impactos Registrados)</b>",
+                color='Visitas', color_continuous_scale=['#0088FF', '#00E5FF']
+            )
+            fig_sov.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
+            fig_sov.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, xaxis={'tickangle': -30}, yaxis_title="Total de Menciones", margin=dict(t=50, b=100, l=40, r=20))
+            st.plotly_chart(fig_sov, use_container_width=True)
+
+            st.markdown("---")
+
+            # --- GRÁFICA 3: EJES TEMÁTICOS Y BARRERAS EN CONSULTORIO ---
+            st.subheader("📊 3. Ejes Temáticos y Barreras Detectadas en Consultorio")
+            ejes_counts = df_filtered_q['Eje_Tematico'].value_counts().reset_index()
+            ejes_counts.columns = ['Eje Tematico', 'Visitas']
+
+            fig_ejes = px.bar(
+                ejes_counts, x='Visitas', y='Eje Tematico', text='Visitas', orientation='h',
+                template='plotly_dark', title="<b>Frecuencia de Ejes Temáticos en Comentarios</b>",
+                color='Visitas', color_continuous_scale=['#004488', '#00CCFF']
+            )
+            fig_ejes.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
+            fig_ejes.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=400, xaxis_title="Total de Visitas", yaxis_title="Eje Temático", margin=dict(t=50, b=40, l=120, r=20))
+            st.plotly_chart(fig_ejes, use_container_width=True)
 
             st.markdown("---")
             
