@@ -307,11 +307,11 @@ with tab_visitas:
         st.warning("⚠️ Por favor carga el archivo 'Indicador Frecuencia' en el primer cargador de la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (CON CALIDAD DE VISITAS AUTÉNTICAS)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (CALIDAD DE VISITAS AL FINAL)
 # =========================================================================
 with tab_cualitativa:
-    st.subheader("🔎 Auditoría Cualitativa: Modelo de Calidad Pharmadvisor, Copy-Paste y Ejes Temáticos")
-    st.markdown("<span style='color: #9AA5B1;'>Evaluación basada en visitas auténticas (excluyendo copy-paste masivo) alineada con los 7 pasos y el modelo de persuasión de Pharmadvisor.</span>", unsafe_allow_html=True)
+    st.subheader("🔎 Auditoría Cualitativa: Copy-Paste, Impactos Promocionales y Modelo de Calidad")
+    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) con filtros en cascada, nivel de copy-paste, impactos promocionales, ejes temáticos y evaluación de calidad en visitas auténticas.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     if df_det is not None:
@@ -360,31 +360,8 @@ with tab_cualitativa:
             df_unique_f['Quality_Category'] = df_unique_f.apply(classify_visit, axis=1)
             df_authentic = df_unique_f[~df_unique_f['Is_Duplicated']].copy()
 
-            # --- GRÁFICA 0: CALIDAD DE VISITA (MODELO PHARMADVISOR - AUTÉNTICAS) ---
-            st.subheader("📊 1. Calidad de Visita (Modelo Pharmadvisor - Visitas Auténticas)")
-            
-            qual_counts = df_authentic['Quality_Category'].value_counts().reset_index()
-            qual_counts.columns = ['Nivel de Calidad', 'Visitas']
-            
-            color_qual_map = {
-                'Calidad Media (Historia de Beneficios)': '#FFC107',
-                'Alta Calidad (Persuasión / Cierre)': '#2ECC71',
-                'Baja Calidad (Trámite / Genérico)': '#E6007E'
-            }
-
-            fig_qual = px.pie(
-                qual_counts, names='Nivel de Calidad', values='Visitas', hole=0.5,
-                template='plotly_dark', title="<b>Distribución de Calidad en Visitas Auténticas</b>",
-                color='Nivel de Calidad', color_discrete_map=color_qual_map
-            )
-            fig_qual.update_traces(textinfo='percent+value', textposition='inside', textfont_size=12)
-            fig_qual.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=400, margin=dict(t=50, b=30, l=20, r=20))
-            st.plotly_chart(fig_qual, use_container_width=True)
-
-            st.markdown("---")
-
             # --- GRÁFICA 1: COMPARATIVA DE LAS 4 COORDINACIONES (% COPY-PASTE) ---
-            st.subheader("📊 2. Comparativa General de las 4 Coordinaciones (Nivel de Copy-Paste)")
+            st.subheader("📊 1. Comparativa General de las 4 Coordinaciones (Nivel de Copy-Paste)")
             
             coord_summary = df_det.drop_duplicates(subset=['Cod. visita']).copy()
             coord_summary['Comentario_Clean'] = coord_summary['Comentario'].astype(str).str.strip().str.lower()
@@ -408,7 +385,7 @@ with tab_cualitativa:
             st.markdown("---")
             
             # --- GRÁFICA 2: PORCENTAJE DE COMENTARIOS REPETIDOS POR REPRESENTANTE ---
-            st.subheader("📊 3. Porcentaje de Comentarios Repetidos por Representante (Visitas Únicas)")
+            st.subheader("📊 2. Porcentaje de Comentarios Repetidos por Representante (Visitas Únicas)")
             
             total_visitas_f = len(df_unique_f)
             dup_visitas_f = df_unique_f['Is_Duplicated'].sum()
@@ -436,7 +413,7 @@ with tab_cualitativa:
             st.markdown("---")
 
             # --- GRÁFICA 3: IMPACTOS PROMOCIONALES ---
-            st.subheader("📊 4. Impactos promocionales")
+            st.subheader("📊 3. Impactos promocionales")
             df_impactos = df_filtered_raw[df_filtered_raw['Impactos'].astype(str).str.strip() != '-']
             sov_counts = df_impactos['Impactos'].value_counts().reset_index()
             sov_counts.columns = ['Producto', 'Visitas']
@@ -453,7 +430,7 @@ with tab_cualitativa:
             st.markdown("---")
 
             # --- GRÁFICA 4: EJES TEMÁTICOS Y BARRERAS EN CONSULTORIO ---
-            st.subheader("📊 5. Ejes Temáticos y Barreras Detectadas en Consultorio")
+            st.subheader("📊 4. Ejes Temáticos y Barreras Detectadas en Consultorio")
             ejes_counts = df_unique_f['Eje_Tematico'].value_counts().reset_index()
             ejes_counts.columns = ['Eje Tematico', 'Visitas']
 
@@ -465,6 +442,29 @@ with tab_cualitativa:
             fig_ejes.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
             fig_ejes.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=400, xaxis_title="Total de Visitas", yaxis_title="Eje Temático", margin=dict(t=50, b=40, l=120, r=20))
             st.plotly_chart(fig_ejes, use_container_width=True)
+
+            st.markdown("---")
+
+            # --- GRÁFICA 5: CALIDAD DE VISITA (MODELO PHARMADVISOR - AUTÉNTICAS) [UBICADA AL FINAL] ---
+            st.subheader("📊 5. Calidad de Visita (Modelo Pharmadvisor - Visitas Auténticas)")
+            
+            qual_counts = df_authentic['Quality_Category'].value_counts().reset_index()
+            qual_counts.columns = ['Nivel de Calidad', 'Visitas']
+            
+            color_qual_map = {
+                'Calidad Media (Historia de Beneficios)': '#FFC107',
+                'Alta Calidad (Persuasión / Cierre)': '#2ECC71',
+                'Baja Calidad (Trámite / Genérico)': '#E6007E'
+            }
+
+            fig_qual = px.pie(
+                qual_counts, names='Nivel de Calidad', values='Visitas', hole=0.5,
+                template='plotly_dark', title="<b>Distribución de Calidad en Visitas Auténticas</b>",
+                color='Nivel de Calidad', color_discrete_map=color_qual_map
+            )
+            fig_qual.update_traces(textinfo='percent+value', textposition='inside', textfont_size=12)
+            fig_qual.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=400, margin=dict(t=50, b=30, l=20, r=20))
+            st.plotly_chart(fig_qual, use_container_width=True)
 
             st.markdown("---")
 
