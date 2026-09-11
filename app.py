@@ -93,22 +93,6 @@ def cargar_datos_frecuencia(uploaded_file=None):
         df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
         df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
         df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
-        
-        def bin_ranking(val):
-            try:
-                v = float(val)
-                if v <= 50: return '1. Top 50'
-                elif v <= 200: return '2. 51 - 200'
-                elif v <= 500: return '3. 201 - 500'
-                elif v <= 1000: return '4. 501 - 1000'
-                else: return '5. 1000+'
-            except:
-                return '6. Sin Ranking / No Cruza'
-
-        if 'Ranking GCH' in df.columns:
-            df['Ranking_Bin_GCH'] = df['Ranking GCH'].apply(bin_ranking)
-        if 'Ranking Allergy' in df.columns:
-            df['Ranking_Bin_Allergy'] = df['Ranking Allergy'].apply(bin_ranking)
         return df
     except Exception as e:
         return None
@@ -131,9 +115,9 @@ df_det = cargar_datos_detallado(uploaded_detallado)
 
 # --- SELECTOR DE MERCADO ---
 st.sidebar.markdown("---")
-st.sidebar.subheader("Selección de Mercado")
+st.sidebar.subheader("Selección de Mercado (Pestaña 1)")
 mercado_seleccionado = st.sidebar.selectbox(
-    "Línea Estratégica:",
+    "Línea Estratégica Mipres:",
     options=["Growth (GCH)", "Allergy", "Consolidado Total (GCH + Allergy)"],
     index=0
 )
@@ -272,13 +256,13 @@ with tab_mipres:
         st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante el segundo cargador en la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (INDICADOR FRECUENCIA)
+# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN
 # =========================================================================
 with tab_visitas:
     st.subheader("Auditoría Comercial y Frecuencia de Visita (Pharmadvisor)")
     if df_frec is not None:
         distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique()) if 'Distrito' in df_frec.columns else []
-        selected_distritos = st.sidebar.multiselect("Distrito", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
+        selected_distritos = st.sidebar.multiselect("Distrito (Pestaña 2)", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
         
         df_filtered = df_frec[df_frec['Distrito'].isin(selected_distritos)] if 'Distrito' in df_frec.columns else df_frec
         
@@ -308,49 +292,106 @@ with tab_visitas:
         st.warning("⚠️ Por favor carga el archivo 'Indicador Frecuencia' en el primer cargador de la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (LISTADO DETALLADO VISITAS)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (FILTROS EN CASCADA Y COORDINACIONES)
 # =========================================================================
 with tab_cualitativa:
-    st.subheader("🔎 Auditoría Cualitativa: Detección de Copy-Paste en Comentarios de Visitas")
-    st.markdown("<span style='color: #9AA5B1;'>Análisis de duplicidad de textos, frases repetidas y calidad de registro basado en el listado detallado de visitas cargado.</span>", unsafe_allow_html=True)
+    st.subheader("🔎 Auditoría Cualitativa: Detección de Copy-Paste y Rendimiento por Coordinación")
+    st.markdown("<span style='color: #9AA5B1;'>Análisis de duplicidad de textos, calidad de registros y comparativa de desempeño entre las 4 Coordinaciones.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     if df_det is not None:
-        if 'Comentario' in df_det.columns and 'Representante' in df_det.columns:
-            df_det['Comentario_Clean'] = df_det['Comentario'].astype(str).str.strip().str.lower()
-            df_det['Comentario_Clean'] = df_det['Comentario_Clean'].apply(lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', x)))
+        if all(col in df_det.columns for col in ['Región', 'Línea', 'Representante', 'Pareto institución', 'Comentario']):
             
-            rep_dup = df_det.groupby('Representante')['Comentario_Clean'].apply(lambda x: (x.duplicated()).sum()).reset_index(name='Duplicados')
-            rep_tot = df_det.groupby('Representante')['Comentario_Clean'].count().reset_index(name='Total')
-            rep_metrics = pd.merge(rep_tot, rep_dup)
-            rep_metrics['Pct_CopyPaste'] = (rep_metrics['Duplicados'] / rep_metrics['Total']) * 100
+            # --- FILTROS EN CASCADA EN LA BARRA LATERAL ---
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("Filtros en Cascada (Pestaña 3)")
             
-            global_dup_count = rep_metrics['Duplicados'].sum()
-            global_total_count = rep_metrics['Total'].sum()
-            global_pct_cp = (global_dup_count / global_total_count) * 100 if global_total_count > 0 else 0
+            # 1. Filtro Región
+            regiones_q = sorted(df_det['Región'].dropna().unique())
+            selected_regiones_q = st.sidebar.multiselect("Región (Coordinación)", options=regiones_q, default=regiones_q, key="q_reg")
+            df_q1 = df_det[df_det['Región'].isin(selected_regiones_q)]
+            
+            # 2. Filtro Línea (dependiente de Región)
+            lineas_q = sorted(df_q1['Línea'].dropna().unique())
+            selected_lineas_q = st.sidebar.multiselect("Línea", options=lineas_q, default=lineas_q, key="q_lin")
+            df_q2 = df_q1[df_q1['Línea'].isin(selected_lineas_q)]
+            
+            # 3. Filtro Representante (dependiente de Línea)
+            reps_q = sorted(df_q2['Representante'].dropna().unique())
+            selected_reps_q = st.sidebar.multiselect("Representante", options=reps_q, default=reps_q, key="q_rep")
+            df_q3 = df_q2[df_q2['Representante'].isin(selected_reps_q)]
+            
+            # 4. Filtro Pareto de la Institución (dependiente de Representante)
+            pareto_q = sorted(df_q3['Pareto institución'].dropna().unique())
+            selected_pareto_q = st.sidebar.multiselect("Pareto Institución", options=pareto_q, default=pareto_q, key="q_par")
+            df_filtered_q = df_q3[df_q3['Pareto institución'].isin(selected_pareto_q)]
 
-            col_qc1, col_qc2, col_qc3 = st.columns(3)
-            col_qc1.metric("Índice Global de Duplicidad (Copy-Paste)", f"{global_pct_cp:.1f}%")
-            col_qc2.metric("Comentarios Analizados", f"{global_total_count:,}")
-            col_qc3.metric("Comentarios Duplicados Detectados", f"{global_dup_count:,}")
-
-            st.markdown("---")
-            st.subheader("📊 Porcentaje de Comentarios Repetidos (Copy-Paste) por Representante")
+            # Limpieza y cálculo de Copy-Paste para el dataframe filtrado
+            df_filtered_q = df_filtered_q.copy()
+            df_filtered_q['Comentario_Clean'] = df_filtered_q['Comentario'].astype(str).str.strip().str.lower()
+            df_filtered_q['Comentario_Clean'] = df_filtered_q['Comentario_Clean'].apply(lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', x)))
             
-            fig_rep_cp = px.bar(
-                rep_metrics.sort_values(by='Pct_CopyPaste', ascending=False),
-                x='Representante', y='Pct_CopyPaste', text='Pct_CopyPaste',
-                template='plotly_dark', title="<b>Índice de Copy-Paste por Representante</b>",
+            # --- GRÁFICA 1: COMPARATIVA DE LAS 4 COORDINACIONES ---
+            st.subheader("📊 Comparativa General de las 4 Coordinaciones (Volumen de Visitas vs % Copy-Paste)")
+            
+            coord_summary = df_det.copy()
+            coord_summary['Comentario_Clean'] = coord_summary['Comentario'].astype(str).str.strip().str.lower()
+            coord_summary['Comentario_Clean'] = coord_summary['Comentario_Clean'].apply(lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', x)))
+            
+            # Calcular duplicados por coordinación sobre el total general de la coordinación
+            coord_grouped = coord_summary.groupby('Región').agg(
+                Total_Visitas=('Comentario_Clean', 'count'),
+                Duplicados=('Comentario_Clean', lambda x: x.duplicated().sum())
+            ).reset_index()
+            coord_grouped['Pct_CopyPaste'] = (coord_grouped['Duplicados'] / coord_grouped['Total_Visitas']) * 100
+
+            fig_coord = px.bar(
+                coord_grouped, x='Región', y='Total_Visitas', text='Pct_CopyPaste',
+                template='plotly_dark', title="<b>Volumen de Visitas y % de Copy-Paste por Coordinación</b>",
                 color='Pct_CopyPaste', color_continuous_scale=['#0088FF', '#E6007E']
             )
-            fig_rep_cp.update_traces(texttemplate='%{text:.1f}%', textposition='outside', textfont_size=10)
-            fig_rep_cp.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=480, xaxis={'tickangle': -35}, yaxis_title="% Duplicidad Interna", margin=dict(t=50, b=140, l=40, r=20))
-            st.plotly_chart(fig_rep_cp, use_container_width=True)
+            fig_coord.update_traces(texttemplate='Copy-Paste: %{text:.1f}%', textposition='outside', textfont_size=12)
+            fig_coord.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, yaxis_title="Total de Visitas Registradas", margin=dict(t=50, b=40, l=40, r=20))
+            st.plotly_chart(fig_coord, use_container_width=True)
 
-            st.markdown("##### Muestra de Comentarios y Objetivos Registrados")
-            display_cols = [c for c in ['Representante', 'Fecha visita', 'Institución 1', 'Objetivo', 'Comentario'] if c in df_det.columns]
-            st.dataframe(df_det[display_cols].head(15), use_container_width=True, hide_index=True)
+            st.markdown("---")
+            
+            # Métricas KPI filtradas
+            total_visitas_f = len(df_filtered_q)
+            dup_visitas_f = df_filtered_q['Comentario_Clean'].duplicated().sum()
+            pct_cp_f = (dup_visitas_f / total_visitas_f) * 100 if total_visitas_f > 0 else 0
+
+            kc1, kc2, kc3 = st.columns(3)
+            kc1.metric("Visitas Filtradas Analizadas", f"{total_visitas_f:,}")
+            kc2.metric("Comentarios Duplicados (Copy-Paste)", f"{dup_visitas_f:,}")
+            kc3.metric("Índice de Duplicidad en Selección", f"{pct_cp_f:.1f}%")
+
+            st.markdown("---")
+            st.subheader("📊 Porcentaje de Comentarios Repetidos por Representante (Según Filtros)")
+            
+            if total_visitas_f > 0:
+                rep_metrics_f = df_filtered_q.groupby('Representante').agg(
+                    Total=('Comentario_Clean', 'count'),
+                    Duplicados=('Comentario_Clean', lambda x: x.duplicated().sum())
+                ).reset_index()
+                rep_metrics_f['Pct_CopyPaste'] = (rep_metrics_f['Duplicados'] / rep_metrics_f['Total']) * 100
+
+                fig_rep_f = px.bar(
+                    rep_metrics_f.sort_values(by='Pct_CopyPaste', ascending=False),
+                    x='Representante', y='Pct_CopyPaste', text='Pct_CopyPaste',
+                    template='plotly_dark', title="<b>Índice de Copy-Paste por Representante (Filtrado)</b>",
+                    color='Pct_CopyPaste', color_continuous_scale=['#0088FF', '#E6007E']
+                )
+                fig_rep_f.update_traces(texttemplate='%{text:.1f}%', textposition='outside', textfont_size=10)
+                fig_rep_f.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=480, xaxis={'tickangle': -35}, yaxis_title="% Duplicidad", margin=dict(t=50, b=140, l=40, r=20))
+                st.plotly_chart(fig_rep_f, use_container_width=True)
+            else:
+                st.warning("No hay datos que coincidan con la combinación de filtros seleccionada.")
+
+            st.markdown("##### Detalle de Registros Filtrados")
+            display_cols = [c for c in ['Región', 'Línea', 'Representante', 'Pareto institución', 'Fecha visita', 'Institución 1', 'Comentario'] if c in df_filtered_q.columns]
+            st.dataframe(df_filtered_q[display_cols].head(25), use_container_width=True, hide_index=True)
         else:
-            st.error("El archivo cargado no contiene las columnas requeridas ('Representante' y 'Comentario').")
+            st.error("El archivo de visitas no contiene las columnas necesarias para aplicar estos filtros.")
     else:
-        st.warning("⚠️ Por favor carga el **Listado Detallado de Visitas** en el tercer cargador de la barra lateral para procesar la auditoría cualitativa.")
+        st.warning("⚠️ Por favor carga el **Listado Detallado de Visitas** en el tercer cargador de la barra lateral.")
