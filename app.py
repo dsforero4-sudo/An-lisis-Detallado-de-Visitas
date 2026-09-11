@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilos CSS ejecutivos
+# Estilos CSS ejecutivos y tarjetas KPI estructuradas
 st.markdown("""
     <style>
     .stApp { 
@@ -31,6 +31,17 @@ st.markdown("""
         font-size: 28px;
         font-weight: bold;
         margin: 0;
+    }
+    .kpi-section-title {
+        color: #0088FF;
+        font-size: 15px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 15px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid rgba(0, 136, 255, 0.3);
+        padding-bottom: 4px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -59,7 +70,7 @@ def cargar_datos_mipres(uploaded_file=None):
         df.columns = [str(c) for c in df.columns]
         
         for col in df.columns:
-            if '2025' in col or '2026' in col or 'Total general' in col:
+            if '2025' in col or '2026' in col or 'Total general' in col or 'Médicos Visitados' in col:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         return df
     except Exception as e:
@@ -147,8 +158,6 @@ with tab_mipres:
         
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
-        total_vol_2026_s1 = df_mipres_filtered[col_vol_2026].sum(skipna=True) if col_vol_2026 in df_mipres_filtered.columns else 0
-        
         # --- CÁLCULOS EXCLUYENDO "No está en..." ---
         if col_pareto in df_mipres_filtered.columns:
             df_mercado_valido = df_mipres_filtered[~df_mipres_filtered[col_pareto].astype(str).str.contains('No está en', case=False, na=False)]
@@ -168,6 +177,14 @@ with tab_mipres:
             
             df_non_pareto = df_mercado_valido[df_mercado_valido[col_pareto] == 'No']
             non_pareto_visitadas = len(df_non_pareto[df_non_pareto[col_visita] == 'Sí'])
+            
+            # Promedio de médicos visitados
+            if 'Médicos Visitados' in df_mercado_valido.columns:
+                prom_medicos_pareto = df_pareto_only['Médicos Visitados'].mean()
+                prom_medicos_non_pareto = df_non_pareto['Médicos Visitados'].mean()
+            else:
+                prom_medicos_pareto = 0
+                prom_medicos_non_pareto = 0
         else:
             total_pareto = 0
             pct_pareto_sobre_total = 0
@@ -175,22 +192,28 @@ with tab_mipres:
             pareto_no_visitadas = 0
             pct_no_visitadas_pareto = 0
             non_pareto_visitadas = 0
+            prom_medicos_pareto = 0
+            prom_medicos_non_pareto = 0
 
-        # FILA 1 DE KPIS
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-        kpi1.metric("Volumen H1 2026", f"{total_vol_2026_s1:,.1f}")
-        kpi2.metric("Total Instituciones Mercado", f"{total_mercado_valido:,}")
-        kpi3.metric("Instituciones Pareto", f"{total_pareto:,}")
-        kpi4.metric("% Pareto sobre Total", f"{pct_pareto_sobre_total:.1f}%")
+        # --- DISTRIBUCIÓN LÓGICA Y ORDENADA DE KPIS EN TRES BLOQUES ---
+        st.markdown('<div class="kpi-section-title">1. Dimensionamiento del Mercado</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        col1.metric("Total Instituciones Válidas", f"{total_mercado_valido:,}")
+        col2.metric("Instituciones Pareto", f"{total_pareto:,} ({pct_pareto_sobre_total:.1f}% del mercado)")
 
-        # FILA 2 DE KPIS
-        kpi5, kpi6, kpi7, kpi8 = st.columns(4)
-        kpi5.metric("Pareto Visitadas", f"{pareto_visitadas:,}")
-        kpi6.metric("Pareto No Visitadas", f"{pareto_no_visitadas:,}")
-        kpi7.metric("% Pareto Sin Visita (Brecha)", f"{pct_no_visitadas_pareto:.1f}%")
-        kpi8.metric("No Pareto Visitadas", f"{non_pareto_visitadas:,}")
+        st.markdown('<div class="kpi-section-title">2. Auditoría de Cobertura en Cuentas Pareto</div>', unsafe_allow_html=True)
+        col3, col4, col5 = st.columns(3)
+        col3.metric("Pareto Visitadas", f"{pareto_visitadas:,}")
+        col4.metric("Pareto No Visitadas", f"{pareto_no_visitadas:,}")
+        col5.metric("Brecha Pareto (Sin Visita)", f"{pct_no_visitadas_pareto:.1f}%", delta_color="inverse")
 
-        st.markdown("<span style='color: #9AA5B1; font-size: 12px;'>* Nota analítica: El total del mercado excluye las instituciones no aplicables para el segmento. Los datos de 2026 corresponden al primer semestre (H1).</span>", unsafe_allow_html=True)
+        st.markdown('<div class="kpi-section-title">3. Esfuerzo Comercial y Promedio de Médicos Visitados</div>', unsafe_allow_html=True)
+        col6, col7, col8 = st.columns(3)
+        col6.metric("No Pareto Visitadas", f"{non_pareto_visitadas:,}")
+        col7.metric("Prom. Médicos Visitados (Pareto)", f"{prom_medicos_pareto:.1f}")
+        col8.metric("Prom. Médicos Visitados (No Pareto)", f"{prom_medicos_non_pareto:.1f}")
+
+        st.markdown("<span style='color: #9AA5B1; font-size: 12px; display: block; margin-top: 15px;'>* Nota analítica: El total del mercado excluye las instituciones no aplicables para el segmento. Los datos de 2026 corresponden al primer semestre (H1).</span>", unsafe_allow_html=True)
         st.markdown("---")
         
         # 1. ANÁLISIS DE CUENTAS CLAVE PARETO NO VISITADAS
