@@ -178,7 +178,6 @@ with tab_mipres:
             df_non_pareto = df_mercado_valido[df_mercado_valido[col_pareto] == 'No']
             non_pareto_visitadas = len(df_non_pareto[df_non_pareto[col_visita] == 'Sí'])
             
-            # Promedio de médicos visitados
             if 'Médicos Visitados' in df_mercado_valido.columns:
                 prom_medicos_pareto = df_pareto_only['Médicos Visitados'].mean()
                 prom_medicos_non_pareto = df_non_pareto['Médicos Visitados'].mean()
@@ -250,35 +249,35 @@ with tab_mipres:
 
         st.markdown("---")
 
-        # 2. COMPARATIVA DE VOLUMEN H1 2026 vs 2025
-        col_vol_2025_str = col_vol_2025
-        col_vol_2026_str = col_vol_2026
+        # 2. MATRIZ DE CRUCE: TOP INSTITUCIONES POR VOLUMEN Mipres vs. ESTATUS DE VISITA (Pharmadvisor)
+        st.subheader(f"📊 Top Instituciones por Volumen Mipres y su Estatus de Visita ({mercado_seleccionado})")
         
-        st.subheader("📈 Dinámica de Prescripción: 2025 Completo vs H1 2026")
-        
-        if col_vol_2025_str in df_mipres_filtered.columns and col_vol_2026_str in df_mipres_filtered.columns:
-            df_dinamica = df_mipres_filtered.sort_values(by=col_vol_2026_str, ascending=False, na_position='last').head(12)
-            df_melted = df_dinamica.melt(id_vars=['Prestador', 'Región'], value_vars=[col_vol_2025_str, col_vol_2026_str], var_name='Periodo', value_name='Volumen')
-            df_melted['Periodo'] = df_melted['Periodo'].apply(lambda x: '2025 (Anual)' if '2025' in str(x) else '2026 (H1)')
+        if col_vol_2026 in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
+            df_cruce = df_mipres_filtered.sort_values(by=col_vol_2026, ascending=False, na_position='last').head(15).copy()
+            # Renombrar estatus de visita para mejor lectura en la leyenda
+            df_cruce['Estatus Visita Pharmadvisor'] = df_cruce[col_visita].apply(lambda x: 'Visitada' if str(x).strip().lower() == 'sí' else 'No Visitada')
             
-            fig_dinamica = px.bar(
-                df_melted,
+            fig_cruce = px.bar(
+                df_cruce,
                 x='Prestador',
-                y='Volumen',
-                color='Periodo',
-                barmode='group',
+                y=col_vol_2026,
+                color='Estatus Visita Pharmadvisor',
+                text=col_vol_2026,
                 template='plotly_dark',
-                title=f"<b>Evolución del Volumen ({mercado_seleccionado})</b>",
-                color_discrete_map={'2025 (Anual)': '#9AA5B1', '2026 (H1)': '#0088FF'}
+                title=f"<b>Volumen H1 2026 y Cobertura Comercial Pharmadvisor</b>",
+                color_discrete_map={'Visitada': '#0088FF', 'No Visitada': '#E6007E'}
             )
-            fig_dinamica.update_layout(
+            fig_cruce.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=10)
+            fig_cruce.update_layout(
                 paper_bgcolor='#1C202C',
                 plot_bgcolor='#2D3346',
-                height=450,
+                height=480,
                 xaxis={'tickangle': -35},
-                margin=dict(t=50, b=120, l=40, r=20)
+                yaxis_title="Volumen H1 2026",
+                margin=dict(t=50, b=130, l=40, r=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
-            st.plotly_chart(fig_dinamica, use_container_width=True)
+            st.plotly_chart(fig_cruce, use_container_width=True)
 
         st.markdown("##### Auditoría Completa de Oportunidades Mipres")
         st.dataframe(df_mipres_filtered, use_container_width=True, hide_index=True)
