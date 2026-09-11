@@ -106,7 +106,6 @@ def cargar_datos_detallado(uploaded_file=None):
         xls = pd.ExcelFile(excel_source)
         df = pd.read_excel(excel_source, sheet_name=xls.sheet_names[0])
         
-        # Categorizar ejes temáticos para la gráfica
         def categorize_comment(text):
             text = str(text).lower()
             if any(w in text for w in ['pap', 'programa', 'siempre juntos', 'fundem', 'pacientes']):
@@ -308,11 +307,11 @@ with tab_visitas:
         st.warning("⚠️ Por favor carga el archivo 'Indicador Frecuencia' en el primer cargador de la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (FILTROS EN CASCADA + IMPACTOS PROMOCIONALES)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (SECUENCIA ACTUALIZADA)
 # =========================================================================
 with tab_cualitativa:
     st.subheader("🔎 Auditoría Cualitativa: Copy-Paste, Impactos Promocionales y Ejes Temáticos")
-    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) con filtros en cascada, nivel de copy-paste, impactos promocionales y ejes temáticos en consultorio.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) con filtros en cascada, nivel de copy-paste por coordinación y por representante, impactos promocionales y ejes temáticos.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     if df_det is not None:
@@ -367,51 +366,13 @@ with tab_cualitativa:
 
             st.markdown("---")
             
-            # --- GRÁFICA 2: IMPACTOS PROMOCIONALES ---
-            st.subheader("📊 2. Impactos promocionales")
-            df_impactos = df_filtered_raw[df_filtered_raw['Impactos'].astype(str).str.strip() != '-']
-            sov_counts = df_impactos['Impactos'].value_counts().reset_index()
-            sov_counts.columns = ['Producto', 'Visitas']
-
-            fig_sov = px.bar(
-                sov_counts, x='Producto', y='Visitas', text='Visitas',
-                template='plotly_dark', title="<b>Impactos Promocionales (Registrados por Visita)</b>",
-                color='Visitas', color_continuous_scale=['#0088FF', '#00E5FF']
-            )
-            fig_sov.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
-            fig_sov.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, xaxis={'tickangle': -30}, yaxis_title="Total de Menciones", margin=dict(t=50, b=100, l=40, r=20))
-            st.plotly_chart(fig_sov, use_container_width=True)
-
-            st.markdown("---")
-
-            # --- GRÁFICA 3: EJES TEMÁTICOS Y BARRERAS EN CONSULTORIO ---
-            st.subheader("📊 3. Ejes Temáticos y Barreras Detectadas en Consultorio")
-            ejes_counts = df_filtered_q['Eje_Tematico'].value_counts().reset_index()
-            ejes_counts.columns = ['Eje Tematico', 'Visitas']
-
-            fig_ejes = px.bar(
-                ejes_counts, x='Visitas', y='Eje Tematico', text='Visitas', orientation='h',
-                template='plotly_dark', title="<b>Frecuencia de Ejes Temáticos en Comentarios</b>",
-                color='Visitas', color_continuous_scale=['#004488', '#00CCFF']
-            )
-            fig_ejes.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
-            fig_ejes.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=400, xaxis_title="Total de Visitas", yaxis_title="Eje Temático", margin=dict(t=50, b=40, l=120, r=20))
-            st.plotly_chart(fig_ejes, use_container_width=True)
-
-            st.markdown("---")
+            # --- GRÁFICA 2: PORCENTAJE DE COMENTARIOS REPETIDOS POR REPRESENTANTE ---
+            st.subheader("📊 2. Porcentaje de Comentarios Repetidos por Representante (Visitas Únicas)")
             
             total_visitas_f = len(df_filtered_q)
             dup_visitas_f = df_filtered_q['Comentario_Clean'].duplicated().sum()
             pct_cp_f = (dup_visitas_f / total_visitas_f) * 100 if total_visitas_f > 0 else 0
 
-            kc1, kc2, kc3 = st.columns(3)
-            kc1.metric("Visitas Únicas Filtradas", f"{total_visitas_f:,}")
-            kc2.metric("Comentarios Duplicados (Copy-Paste)", f"{dup_visitas_f:,}")
-            kc3.metric("Índice de Duplicidad en Selección", f"{pct_cp_f:.1f}%")
-
-            st.markdown("---")
-            st.subheader("📊 Porcentaje de Comentarios Repetidos por Representante (Visitas Únicas)")
-            
             if total_visitas_f > 0:
                 rep_metrics_f = df_filtered_q.groupby('Representante').agg(
                     Total=('Cod. visita', 'count'),
@@ -431,6 +392,47 @@ with tab_cualitativa:
             else:
                 st.warning("No hay datos que coincidan con la combinación de filtros seleccionada.")
 
+            st.markdown("---")
+
+            # --- GRÁFICA 3: IMPACTOS PROMOCIONALES ---
+            st.subheader("📊 3. Impactos promocionales")
+            df_impactos = df_filtered_raw[df_filtered_raw['Impactos'].astype(str).str.strip() != '-']
+            sov_counts = df_impactos['Impactos'].value_counts().reset_index()
+            sov_counts.columns = ['Producto', 'Visitas']
+
+            fig_sov = px.bar(
+                sov_counts, x='Producto', y='Visitas', text='Visitas',
+                template='plotly_dark', title="<b>Impactos Promocionales (Registrados por Visita)</b>",
+                color='Visitas', color_continuous_scale=['#0088FF', '#00E5FF']
+            )
+            fig_sov.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
+            fig_sov.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, xaxis={'tickangle': -30}, yaxis_title="Total de Menciones", margin=dict(t=50, b=100, l=40, r=20))
+            st.plotly_chart(fig_sov, use_container_width=True)
+
+            st.markdown("---")
+
+            # --- GRÁFICA 4: EJES TEMÁTICOS Y BARRERAS EN CONSULTORIO ---
+            st.subheader("📊 4. Ejes Temáticos y Barreras Detectadas en Consultorio")
+            ejes_counts = df_filtered_q['Eje_Tematico'].value_counts().reset_index()
+            ejes_counts.columns = ['Eje Tematico', 'Visitas']
+
+            fig_ejes = px.bar(
+                ejes_counts, x='Visitas', y='Eje Tematico', text='Visitas', orientation='h',
+                template='plotly_dark', title="<b>Frecuencia de Ejes Temáticos en Comentarios</b>",
+                color='Visitas', color_continuous_scale=['#004488', '#00CCFF']
+            )
+            fig_ejes.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
+            fig_ejes.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=400, xaxis_title="Total de Visitas", yaxis_title="Eje Temático", margin=dict(t=50, b=40, l=120, r=20))
+            st.plotly_chart(fig_ejes, use_container_width=True)
+
+            st.markdown("---")
+
+            kc1, kc2, kc3 = st.columns(3)
+            kc1.metric("Visitas Únicas Filtradas", f"{total_visitas_f:,}")
+            kc2.metric("Comentarios Duplicados (Copy-Paste)", f"{dup_visitas_f:,}")
+            kc3.metric("Índice de Duplicidad en Selección", f"{pct_cp_f:.1f}%")
+
+            st.markdown("---")
             st.markdown("##### Detalle de Visitas Únicas Filtradas")
             display_cols = [c for c in ['Cod. visita', 'Región', 'Línea', 'Representante', 'Pareto institución', 'Fecha visita', 'Institución 1', 'Comentario'] if c in df_filtered_q.columns]
             st.dataframe(df_filtered_q[display_cols].head(25), use_container_width=True, hide_index=True)
