@@ -227,7 +227,7 @@ if df_frec is not None:
     with col_rank2:
         st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_Allergy', "<b>Frecuencia vs Ranking Allergy</b>"), use_container_width=True)
 
-    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (ETIQUETAS DENTRO DE LA BARRA) ---
+    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (ETIQUETAS VERTICALES DENTRO DE LA BARRA) ---
     st.markdown("---")
     st.subheader("Análisis por Institución: Frecuencia Promedio de Visita")
 
@@ -249,15 +249,15 @@ if df_frec is not None:
         total_sel = inst_summary['Cantidad_Medicos'].sum()
         inst_summary['Porcentaje'] = (inst_summary['Cantidad_Medicos'] / total_sel * 100) if total_sel > 0 else 0
         
-        # Etiqueta clara dentro de la barra: Porcentaje + Número absoluto de médicos
+        # Etiqueta detallada dentro de la barra: Porcentaje + Número absoluto de médicos
         inst_summary['Etiqueta'] = inst_summary.apply(
             lambda row: f"{row['Porcentaje']:.1f}% ({int(row['Cantidad_Medicos'])})", axis=1
         )
         
-        # Ordenar de mayor a menor frecuencia para mejor lectura visual
+        # Ordenar de mayor a frecuencia para mejor lectura visual
         inst_summary = inst_summary.sort_values(by='Frecuencia_Promedio', ascending=False)
 
-        # Gráfica de barras con color uniforme y etiquetas dentro
+        # Gráfica de barras con color uniforme y etiquetas verticales dentro
         fig_bar = px.bar(
             inst_summary, 
             x='Institución 1.1', 
@@ -270,7 +270,7 @@ if df_frec is not None:
         
         fig_bar.update_traces(
             textposition='inside',
-            insidetextorientation='radial',
+            textangle=90,
             textfont_size=11,
             textfont_color='white'
         )
