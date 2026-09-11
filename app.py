@@ -56,7 +56,6 @@ def cargar_datos_mipres(uploaded_file=None):
         return None
     try:
         df = pd.read_excel(source, sheet_name='Consolidado', header=1)
-        # Convertir nombres de columnas a string para evitar conflictos de tipo int vs str
         df.columns = [str(c) for c in df.columns]
         
         for col in df.columns:
@@ -149,22 +148,36 @@ with tab_mipres:
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
         total_vol_2026_s1 = df_mipres_filtered[col_vol_2026].sum(skipna=True) if col_vol_2026 in df_mipres_filtered.columns else 0
-        total_vol_2025_full = df_mipres_filtered[col_vol_2025].sum(skipna=True) if col_vol_2025 in df_mipres_filtered.columns else 0
         
-        # --- CÁLCULO DE BRECHA DE COBERTURA EXCLUSIVO PARA PARETO SEGÚN MERCADO ---
+        # --- CÁLCULOS DE COBERTURA Y PARETO ---
+        total_mercado = len(df_mipres_filtered)
+        
         if col_pareto in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
             df_pareto_only = df_mipres_filtered[df_mipres_filtered[col_pareto] == 'Sí']
             total_pareto = len(df_pareto_only)
-            sin_visita_pareto = len(df_pareto_only[df_pareto_only[col_visita] == 'No'])
-            pct_brecha_pareto = (sin_visita_pareto / total_pareto * 100) if total_pareto > 0 else 0
+            pct_pareto_sobre_total = (total_pareto / total_mercado * 100) if total_mercado > 0 else 0
+            
+            pareto_visitadas = len(df_pareto_only[df_pareto_only[col_visita] == 'Sí'])
+            pareto_no_visitadas = len(df_pareto_only[df_pareto_only[col_visita] == 'No'])
+            pct_no_visitadas_pareto = (pareto_no_visitadas / total_pareto * 100) if total_pareto > 0 else 0
         else:
-            pct_brecha_pareto = 0
-            total_pareto = len(df_mipres_filtered)
+            total_pareto = 0
+            pct_pareto_sobre_total = 0
+            pareto_visitadas = 0
+            pareto_no_visitadas = 0
+            pct_no_visitadas_pareto = 0
 
+        # FILA 1 DE KPIS
         kpi1, kpi2, kpi3 = st.columns(3)
         kpi1.metric("Volumen Acumulado H1 2026", f"{total_vol_2026_s1:,.1f}", delta="Primeros 2 Trimestres", delta_color="off")
-        kpi2.metric(f"Instituciones Pareto ({mercado_seleccionado})", f"{total_pareto:,}")
-        kpi3.metric("Brecha en Cuentas Pareto (Sin Visita)", f"{pct_brecha_pareto:.1f}%", delta_color="inverse")
+        kpi2.metric("Total Instituciones del Mercado", f"{total_mercado:,}")
+        kpi3.metric("Instituciones Pareto", f"{total_pareto:,} ({pct_pareto_sobre_total:.1f}% del total)")
+
+        # FILA 2 DE KPIS (Específicas de Pareto y Visitas)
+        kpi4, kpi5, kpi6 = st.columns(3)
+        kpi4.metric("Pareto Visitadas", f"{pareto_visitadas:,}")
+        kpi5.metric("Pareto No Visitadas", f"{pareto_no_visitadas:,}")
+        kpi6.metric("Brecha Pareto (Sin Visita)", f"{pct_no_visitadas_pareto:.1f}%", delta_color="inverse")
 
         st.markdown("<span style='color: #9AA5B1; font-size: 12px;'>* Nota analítica: Los datos de 2026 reflejan la ejecución real del primer semestre (H1). Se presentan de forma independiente frente al consolidado anual 2025 para evitar sesgos de estacionalidad.</span>", unsafe_allow_html=True)
         st.markdown("---")
@@ -204,11 +217,14 @@ with tab_mipres:
         st.markdown("---")
 
         # 2. COMPARATIVA DE VOLUMEN H1 2026 vs 2025
+        col_vol_2025_str = col_vol_2025
+        col_vol_2026_str = col_vol_2026
+        
         st.subheader("📈 Dinámica de Prescripción: 2025 Completo vs H1 2026")
         
-        if col_vol_2025 in df_mipres_filtered.columns and col_vol_2026 in df_mipres_filtered.columns:
-            df_dinamica = df_mipres_filtered.sort_values(by=col_vol_2026, ascending=False, na_position='last').head(12)
-            df_melted = df_dinamica.melt(id_vars=['Prestador', 'Región'], value_vars=[col_vol_2025, col_vol_2026], var_name='Periodo', value_name='Volumen')
+        if col_vol_2025_str in df_mipres_filtered.columns and col_vol_2026_str in df_mipres_filtered.columns:
+            df_dinamica = df_mipres_filtered.sort_values(by=col_vol_2026_str, ascending=False, na_position='last').head(12)
+            df_melted = df_dinamica.melt(id_vars=['Prestador', 'Región'], value_vars=[col_vol_2025_str, col_vol_2026_str], var_name='Periodo', value_name='Volumen')
             df_melted['Periodo'] = df_melted['Periodo'].apply(lambda x: '2025 (Anual)' if '2025' in str(x) else '2026 (H1)')
             
             fig_dinamica = px.bar(
