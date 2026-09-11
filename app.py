@@ -84,9 +84,13 @@ def cargar_datos_mipres(uploaded_file=None):
 
 @st.cache_data
 def cargar_datos_frecuencia(uploaded_file=None):
-    excel_source = uploaded_file if uploaded_file is not None else 'Indicador_frecuencia_medicos.xlsx'
-    if not os.path.exists('Indicador_frecuencia_medicos.xlsx') and uploaded_file is None:
-        return None
+    if uploaded_file is None:
+        if os.path.exists('Indicador_frecuencia_medicos.xlsx'):
+            excel_source = 'Indicador_frecuencia_medicos.xlsx'
+        else:
+            return None
+    else:
+        excel_source = uploaded_file
     try:
         xls = pd.ExcelFile(excel_source)
         df = pd.read_excel(excel_source, sheet_name=xls.sheet_names[0])
@@ -274,7 +278,7 @@ with tab_mipres:
 # PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (INDICADOR DE FRECUENCIA)
 # =========================================================================
 with tab_visitas:
-    st.subheader("Auditoría Comercial y Frecuencia de Visita (Indicador de Frecuencia)")
+    st.subheader("Auditoría Comercial y Frecuencia de Visita (Pharmadvisor)")
     if df_frec is not None:
         distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique()) if 'Distrito' in df_frec.columns else []
         selected_distritos = st.sidebar.multiselect("Distrito (Pestaña 2)", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
