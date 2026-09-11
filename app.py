@@ -227,9 +227,9 @@ if df_frec is not None:
     with col_rank2:
         st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_Allergy', "<b>Frecuencia vs Ranking Allergy</b>"), use_container_width=True)
 
-    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (ETIQUETAS VERTICALES DENTRO DE LA BARRA) ---
+    # --- SECCIÓN 4: ANÁLISIS COMPARATIVO POR INSTITUCIÓN (ORDENADAS POR RANKING Y % DE FRECUENCIA HORIZONTAL) ---
     st.markdown("---")
-    st.subheader("Análisis por Institución: Frecuencia Promedio de Visita")
+    st.subheader("Análisis por Institución: Frecuencia Promedio Ordenada por Ranking")
 
     instituciones_disponibles = sorted(df_final['Institución 1.1'].dropna().unique())
     selected_instituciones = st.multiselect(
@@ -241,36 +241,41 @@ if df_frec is not None:
     if selected_instituciones:
         df_inst_filtered = df_final[df_final['Institución 1.1'].isin(selected_instituciones)]
         
+        # Función auxiliar para convertir ranking a numérico para ordenamiento
+        def parse_rank(val):
+            try:
+                return float(val)
+            except:
+                return 999999.0
+
+        df_inst_filtered['Numeric_Rank'] = df_inst_filtered['Ranking GCH'].apply(parse_rank)
+        
+        # Agrupar por institución calculando el mejor ranking, frecuencia promedio y médicos
         inst_summary = df_inst_filtered.groupby('Institución 1.1').agg(
+            Best_Ranking=('Numeric_Rank', 'min'),
             Cantidad_Medicos=('Código', 'count'),
             Frecuencia_Promedio=('Ind Frecuencia médico', 'mean')
         ).reset_index()
         
-        total_sel = inst_summary['Cantidad_Medicos'].sum()
-        inst_summary['Porcentaje'] = (inst_summary['Cantidad_Medicos'] / total_sel * 100) if total_sel > 0 else 0
+        # Ordenar estrictamente por el ranking (Ranking 1 primero)
+        inst_summary = inst_summary.sort_values(by='Best_Ranking', ascending=True)
         
-        # Etiqueta detallada dentro de la barra: Porcentaje + Número absoluto de médicos
-        inst_summary['Etiqueta'] = inst_summary.apply(
-            lambda row: f"{row['Porcentaje']:.1f}% ({int(row['Cantidad_Medicos'])})", axis=1
-        )
-        
-        # Ordenar de mayor a frecuencia para mejor lectura visual
-        inst_summary = inst_summary.sort_values(by='Frecuencia_Promedio', ascending=False)
+        # Formato de etiqueta horizontal con el % del índice de frecuencia (ej. 133.0%)
+        inst_summary['Etiqueta_Freq_Pct'] = inst_summary['Frecuencia_Promedio'].apply(lambda x: f"{x * 100:.1f}%")
 
-        # Gráfica de barras con color uniforme y etiquetas verticales dentro
+        # Gráfica de barras ordenada por ranking
         fig_bar = px.bar(
             inst_summary, 
             x='Institución 1.1', 
             y='Frecuencia_Promedio',
-            text='Etiqueta',
+            text='Etiqueta_Freq_Pct',
             template='plotly_dark',
-            title="<b>Índice de Frecuencia Promedio por Institución</b>",
+            title="<b>Índice de Frecuencia Promedio (Ordenado por Ranking)</b>",
             color_discrete_sequence=['#0088FF']
         )
         
         fig_bar.update_traces(
             textposition='inside',
-            textangle=90,
             textfont_size=11,
             textfont_color='white'
         )
@@ -279,7 +284,7 @@ if df_frec is not None:
             paper_bgcolor='#1C202C',
             plot_bgcolor='#2D3346',
             height=500,
-            xaxis_title="Institución",
+            xaxis_title="Institución (Orden de Ranking)",
             yaxis_title="Índice de Frecuencia Promedio",
             xaxis={'tickangle': -35},
             margin=dict(t=60, b=130, l=40, r=20),
@@ -288,11 +293,11 @@ if df_frec is not None:
         
         st.plotly_chart(fig_bar, use_container_width=True)
 
-        st.markdown("##### Detalle de Frecuencia, Porcentaje y Médicos por Institución")
-        inst_summary_display = inst_summary[['Institución 1.1', 'Frecuencia_Promedio', 'Cantidad_Medicos', 'Porcentaje']].copy()
-        inst_summary_display.columns = ['Institución', 'Frecuencia Promedio', 'Cantidad de Médicos', '% del Total']
+        st.markdown("##### Detalle de Ranking, Frecuencia y Médicos por Institución")
+        inst_summary_display = inst_summary[['Institución 1.1', 'Best_Ranking', 'Frecuencia_Promedio', 'Cantidad_Medicos']].copy()
+        inst_summary_display['Best_Ranking'] = inst_summary_display['Best_Ranking'].apply(lambda x: int(x) if x < 999999 else 'N/A')
+        inst_summary_display.columns = ['Institución', 'Mejor Ranking', 'Frecuencia Promedio', 'Cantidad de Médicos']
         inst_summary_display['Frecuencia Promedio'] = inst_summary_display['Frecuencia Promedio'].round(2)
-        inst_summary_display['% del Total'] = inst_summary_display['% del Total'].round(1).astype(str) + '%'
         st.dataframe(inst_summary_display, use_container_width=True, hide_index=True)
     else:
         st.info("ℹ️ Por favor selecciona al menos una institución en el filtro superior para visualizar la comparativa.")
