@@ -271,10 +271,10 @@ with tab_mipres:
         st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante el segundo cargador en la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN
+# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (INDICADOR DE FRECUENCIA)
 # =========================================================================
 with tab_visitas:
-    st.subheader("Auditoría Comercial y Frecuencia de Visita (Pharmadvisor)")
+    st.subheader("Auditoría Comercial y Frecuencia de Visita (Indicador de Frecuencia)")
     if df_frec is not None:
         distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique()) if 'Distrito' in df_frec.columns else []
         selected_distritos = st.sidebar.multiselect("Distrito (Pestaña 2)", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
@@ -304,10 +304,10 @@ with tab_visitas:
         with col3:
             st.plotly_chart(estilizar_grafica_con_cantidad(df_filtered, "<b>3. Mercados Combinados</b>", 'Torta_Comb'), use_container_width=True)
     else:
-        st.warning("⚠️ Por favor carga el archivo 'Indicador Frecuencia' en el primer cargador de la barra lateral.")
+        st.warning("⚠️ Por favor carga el archivo **Indicador Frecuencia** en el primer cargador de la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (CALIDAD DE VISITAS AL FINAL)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS
 # =========================================================================
 with tab_cualitativa:
     st.subheader("🔎 Auditoría Cualitativa: Copy-Paste, Impactos Promocionales y Modelo de Calidad")
@@ -445,7 +445,7 @@ with tab_cualitativa:
 
             st.markdown("---")
 
-            # --- GRÁFICA 5: CALIDAD DE VISITA (MODELO PHARMADVISOR - AUTÉNTICAS) [UBICADA AL FINAL] ---
+            # --- GRÁFICA 5: CALIDAD DE VISITA (MODELO PHARMADVISOR - AUTÉNTICAS) ---
             st.subheader("📊 5. Calidad de Visita (Modelo Pharmadvisor - Visitas Auténticas)")
             
             qual_counts = df_authentic['Quality_Category'].value_counts().reset_index()
@@ -462,7 +462,7 @@ with tab_cualitativa:
                 template='plotly_dark', title="<b>Distribución de Calidad en Visitas Auténticas</b>",
                 color='Nivel de Calidad', color_discrete_map=color_qual_map
             )
-            fig_qual.update_traces(textinfo='percent+value', textposition='inside', textfont_size=12)
+            fig_qual.update_traces(textinfo='percent+value', textposition='inside', insidetextorientation='horizontal', textfont_size=12)
             fig_qual.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=400, margin=dict(t=50, b=30, l=20, r=20))
             st.plotly_chart(fig_qual, use_container_width=True)
 
