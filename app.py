@@ -94,9 +94,10 @@ def cargar_datos_frecuencia(uploaded_file=None):
     try:
         xls = pd.ExcelFile(excel_source)
         df = pd.read_excel(excel_source, sheet_name=xls.sheet_names[0])
-        df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
-        df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
-        df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
+        if 'Pareto 1' in df.columns:
+            df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
+            df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
+            df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
         return df
     except Exception as e:
         return None
@@ -275,10 +276,10 @@ with tab_mipres:
         st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante el segundo cargador en la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (FRECUENCIA Y COBERTURA)
+# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (INDICADOR DE FRECUENCIA)
 # =========================================================================
 with tab_visitas:
-    st.subheader("Auditoría Comercial y Frecuencia de Visita (Indicador de Frecuencia)")
+    st.subheader("Auditoría Comercial y Frecuencia de Visita (Pharmadvisor)")
     if df_frec is not None:
         distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique()) if 'Distrito' in df_frec.columns else []
         selected_distritos = st.sidebar.multiselect("Distrito (Pestaña 2)", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
@@ -310,18 +311,28 @@ with tab_visitas:
 
         st.markdown("---")
         st.subheader("📊 Indicadores de Frecuencia y Cobertura por Distrito")
-        if 'Frecuencia' in df_filtered.columns or 'Visitas' in df_filtered.columns or 'Distrito' in df_filtered.columns:
-            frec_col = 'Frecuencia' if 'Frecuencia' in df_filtered.columns else ('Visitas' if 'Visitas' in df_filtered.columns else None)
-            if frec_col:
-                df_frec_dist = df_filtered.groupby('Distrito')[frec_col].mean().reset_index()
-                fig_frec_dist = px.bar(
-                    df_frec_dist, x='Distrito', y=frec_col, text=frec_col,
-                    template='plotly_dark', title=f"<b>Promedio de {frec_col} por Distrito</b>",
-                    color=frec_col, color_continuous_scale=['#0088FF', '#E6007E']
-                )
-                fig_frec_dist.update_traces(texttemplate='%{text:.2f}', textposition='outside', textfont_size=11)
-                fig_frec_dist.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=420, margin=dict(t=50, b=40, l=40, r=20))
-                st.plotly_chart(fig_frec_dist, use_container_width=True)
+        
+        # Detección automática y flexible de la columna de frecuencia/visitas o conteo por distrito
+        numeric_cols = [c for c in df_filtered.select_dtypes(include=['number']).columns if c.lower() in ['frecuencia', 'visitas', 'impactos', 'cantidad', 'medicos', 'total']]
+        target_metric = numeric_cols[0] if numeric_cols else None
+        
+        if 'Distrito' in df_filtered.columns:
+            if target_metric:
+                df_grouped_dist = df_filtered.groupby('Distrito')[target_metric].mean().reset_index()
+                y_label = f"Promedio de {target_metric}"
+            else:
+                df_grouped_dist = df_filtered.groupby('Distrito').size().reset_index(name='Total_Registros')
+                target_metric = 'Total_Registros'
+                y_label = "Total de Registros / Visitas"
+
+            fig_dist = px.bar(
+                df_grouped_dist, x='Distrito', y=target_metric, text=target_metric,
+                template='plotly_dark', title=f"<b>{y_label} por Distrito</b>",
+                color=target_metric, color_continuous_scale=['#0088FF', '#E6007E']
+            )
+            fig_dist.update_traces(texttemplate='%{text:,.1f}', textposition='outside', textfont_size=11)
+            fig_dist.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, xaxis={'tickangle': -30}, yaxis_title=y_label, margin=dict(t=50, b=80, l=40, r=20))
+            st.plotly_chart(fig_dist, use_container_width=True)
     else:
         st.warning("⚠️ Por favor carga el archivo **Indicador Frecuencia** en el primer cargador de la barra lateral.")
 
