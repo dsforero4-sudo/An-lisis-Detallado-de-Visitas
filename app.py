@@ -140,8 +140,12 @@ else:
     col_pareto = 'Pareto_Consolidado'
     col_visita = 'Visita_Consolidado'
 
-# --- DEFINICIÓN DE PESTAÑAS PRINCIPALES ---
-tab_mipres, tab_visitas = st.tabs(["📊 Inteligencia Mipres & Oportunidades", "📈 Auditoría de Visitas & Paretización"])
+# --- DEFINICIÓN DE LAS TRES PESTAÑAS PRINCIPALES ---
+tab_mipres, tab_visitas, tab_cualitativa = st.tabs([
+    "📊 Inteligencia Mipres & Oportunidades", 
+    "📈 Auditoría de Visitas & Paretización", 
+    "🔎 Auditoría Cualitativa & Ventas"
+])
 
 # =========================================================================
 # PESTAÑA 1: INTELIGENCIA MIPRES & OPORTUNIDADES COMERCIALES (ESTRATÉGICA)
@@ -150,7 +154,6 @@ with tab_mipres:
     st.subheader(f"Tablero Estratégico y Potencial de Mercado - Línea {mercado_seleccionado} (Base Mipres)")
     
     if df_mipres is not None:
-        # Si se selecciona Consolidado, preparamos las columnas calculadas
         if mercado_seleccionado == "Consolidado Total (GCH + Allergy)":
             df_mipres['Vol_Consolidado'] = df_mipres['2026'].fillna(0) + df_mipres['2026.1'].fillna(0)
             
@@ -177,7 +180,6 @@ with tab_mipres:
         
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
-        # --- CÁLCULOS EXCLUYENDO "No está en..." ---
         if col_pareto in df_mipres_filtered.columns:
             if mercado_seleccionado == "Consolidado Total (GCH + Allergy)":
                 df_mercado_valido = df_mipres_filtered[df_mipres_filtered[col_pareto] != 'No aplica']
@@ -216,7 +218,6 @@ with tab_mipres:
             prom_medicos_pareto = 0
             prom_medicos_non_pareto = 0
 
-        # --- DISTRIBUCIÓN LÓGICA Y ORDENADA DE KPIS EN TRES BLOQUES ---
         st.markdown('<div class="kpi-section-title">1. Dimensionamiento del Mercado</div>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         col1.metric("Total Instituciones Válidas", f"{total_mercado_valido:,}")
@@ -237,9 +238,7 @@ with tab_mipres:
         st.markdown("<span style='color: #9AA5B1; font-size: 12px; display: block; margin-top: 15px;'>* Nota analítica: El total del mercado excluye las instituciones no aplicables para el segmento. Los datos de 2026 corresponden al primer semestre (H1).</span>", unsafe_allow_html=True)
         st.markdown("---")
         
-        # 1. ANÁLISIS DE CUENTAS CLAVE PARETO NO VISITADAS (TOP 20)
         st.subheader(f"🎯 Top 20 Instituciones Pareto de Alto Volumen SIN Visita ({mercado_seleccionado})")
-        
         if col_pareto in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
             df_brecha_pareto = df_mipres_filtered[
                 (df_mipres_filtered[col_pareto] == 'Sí') & 
@@ -248,56 +247,29 @@ with tab_mipres:
             
             if not df_brecha_pareto.empty:
                 fig_brecha = px.bar(
-                    df_brecha_pareto,
-                    x='Prestador',
-                    y=col_vol_2026,
-                    text=col_vol_2026,
-                    template='plotly_dark',
-                    title=f"<b>Top 20 Potencial en Instituciones Pareto No Visitadas ({mercado_seleccionado})</b>",
+                    df_brecha_pareto, x='Prestador', y=col_vol_2026, text=col_vol_2026,
+                    template='plotly_dark', title=f"<b>Top 20 Potencial en Instituciones Pareto No Visitadas ({mercado_seleccionado})</b>",
                     color_discrete_sequence=['#E6007E']
                 )
                 fig_brecha.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=11)
-                fig_brecha.update_layout(
-                    paper_bgcolor='#1C202C',
-                    plot_bgcolor='#2D3346',
-                    height=480,
-                    xaxis={'tickangle': -35},
-                    yaxis_title="Volumen Semestral Mipres (2026 H1)",
-                    margin=dict(t=50, b=130, l=40, r=20)
-                )
+                fig_brecha.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=480, xaxis={'tickangle': -35}, yaxis_title="Volumen Semestral Mipres (2026 H1)", margin=dict(t=50, b=130, l=40, r=20))
                 st.plotly_chart(fig_brecha, use_container_width=True)
             else:
                 st.success("🎉 ¡Excelente cobertura! Todas las instituciones Pareto de este mercado están siendo visitadas.")
 
         st.markdown("---")
-
-        # 2. MATRIZ DE CRUCE: TOP 20 INSTITUCIONES POR VOLUMEN Mipres vs. ESTATUS DE VISITA
         st.subheader(f"📊 Top 20 Instituciones por Volumen Mipres y su Estatus de Visita ({mercado_seleccionado})")
-        
         if col_vol_2026 in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
             df_cruce = df_mipres_filtered.sort_values(by=col_vol_2026, ascending=False, na_position='last').head(20).copy()
             df_cruce['Estatus Visita Pharmadvisor'] = df_cruce[col_visita].apply(lambda x: 'Visitada' if str(x).strip().lower() == 'sí' else 'No Visitada')
             
             fig_cruce = px.bar(
-                df_cruce,
-                x='Prestador',
-                y=col_vol_2026,
-                color='Estatus Visita Pharmadvisor',
-                text=col_vol_2026,
-                template='plotly_dark',
-                title=f"<b>Top 20 Volumen H1 2026 y Cobertura Comercial Pharmadvisor</b>",
+                df_cruce, x='Prestador', y=col_vol_2026, color='Estatus Visita Pharmadvisor', text=col_vol_2026,
+                template='plotly_dark', title=f"<b>Top 20 Volumen H1 2026 y Cobertura Comercial Pharmadvisor</b>",
                 color_discrete_map={'Visitada': '#0088FF', 'No Visitada': '#E6007E'}
             )
             fig_cruce.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=10)
-            fig_cruce.update_layout(
-                paper_bgcolor='#1C202C',
-                plot_bgcolor='#2D3346',
-                height=500,
-                xaxis={'tickangle': -35},
-                yaxis_title="Volumen H1 2026",
-                margin=dict(t=50, b=140, l=40, r=20),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
+            fig_cruce.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=500, xaxis={'tickangle': -35}, yaxis_title="Volumen H1 2026", margin=dict(t=50, b=140, l=40, r=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig_cruce, use_container_width=True)
 
         st.markdown("##### Auditoría Completa de Oportunidades Mipres")
@@ -331,12 +303,9 @@ with tab_visitas:
         selected_representantes = st.sidebar.multiselect("Representante", options=representantes_disponibles, default=representantes_disponibles, key="rep_ph")
 
         df_final = df_filtered[df_filtered['Representante'].isin(selected_representantes)]
-
-        total_medicos_filtrados = len(df_final)
-        st.markdown(f"<span style='color: #9AA5B1; font-size: 15px;'>Mostrando análisis para <b>{total_medicos_filtrados:,}</b> registros médicos seleccionados.</span>", unsafe_allow_html=True)
+        st.markdown(f"<span style='color: #9AA5B1; font-size: 15px;'>Mostrando análisis para <b>{len(df_final):,}</b> registros médicos seleccionados.</span>", unsafe_allow_html=True)
         st.markdown("---")
 
-        # SECCIÓN 1: DONAS INSTITUCIONALES
         st.subheader("Distribución de Médicos por Tipo de Clasificación Institucional (Pareto vs. No Pareto)")
         col1, col2, col3 = st.columns(3)
         color_map = {'Inst. Pareto': '#0088FF', 'Inst. No Pareto': '#E6007E'}
@@ -344,16 +313,9 @@ with tab_visitas:
         def estilizar_grafica_con_cantidad(df_data, titulo, col_categoria):
             grouped = df_data.groupby(col_categoria)['Código'].count().reset_index()
             grouped.columns = ['Categoría', 'Médicos']
-            fig = px.pie(
-                grouped, names='Categoría', values='Médicos', hole=0.5,
-                title=titulo, color='Categoría', color_discrete_map=color_map, template='plotly_dark'
-            )
+            fig = px.pie(grouped, names='Categoría', values='Médicos', hole=0.5, title=titulo, color='Categoría', color_discrete_map=color_map, template='plotly_dark')
             fig.update_traces(textinfo='percent+value', textposition='inside', insidetextorientation='horizontal', textfont_size=12)
-            fig.update_layout(
-                paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=370, showlegend=True,
-                legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
-                margin=dict(t=50, b=60, l=20, r=20)
-            )
+            fig.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=370, showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5), margin=dict(t=50, b=60, l=20, r=20))
             return fig
 
         with col1:
@@ -364,24 +326,15 @@ with tab_visitas:
             st.plotly_chart(estilizar_grafica_con_cantidad(df_final, "<b>3. Mercados Combinados</b>", 'Torta_Comb'), use_container_width=True)
 
         st.markdown("---")
-
-        # SECCIÓN 2: FRECUENCIA BARRAS
         st.subheader("Índice de Frecuencia Promedio de Visita: Pareto vs No Pareto")
         col_freq1, col_freq2, col_freq3 = st.columns(3)
 
         def grafica_frecuencia_barras(df_data, titulo, col_cat):
             freq_df = df_data.groupby(col_cat)['Ind Frecuencia médico'].mean().reset_index()
             freq_df.columns = ['Clasificación', 'Frecuencia Promedio']
-            fig = px.bar(
-                freq_df, x='Clasificación', y='Frecuencia Promedio',
-                text='Frecuencia Promedio', color='Clasificación',
-                color_discrete_map=color_map, template='plotly_dark', title=titulo
-            )
+            fig = px.bar(freq_df, x='Clasificación', y='Frecuencia Promedio', text='Frecuencia Promedio', color='Clasificación', color_discrete_map=color_map, template='plotly_dark', title=titulo)
             fig.update_traces(texttemplate='%{text:.2f}', textposition='outside', textfont_size=13)
-            fig.update_layout(
-                paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=340, showlegend=False,
-                xaxis_title="", yaxis_title="Índice Promedio", margin=dict(t=50, b=30, l=20, r=20)
-            )
+            fig.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=340, showlegend=False, xaxis_title="", yaxis_title="Índice Promedio", margin=dict(t=50, b=30, l=20, r=20))
             return fig
 
         with col_freq1:
@@ -392,28 +345,17 @@ with tab_visitas:
             st.plotly_chart(grafica_frecuencia_barras(df_final, "<b>Frecuencia Combinada</b>", 'Torta_Comb'), use_container_width=True)
 
         st.markdown("---")
-
-        # SECCIÓN 3: RANKING
         st.subheader("Índice de Frecuencia Promedio según Posición en el Ranking de Paretización")
         col_rank1, col_rank2 = st.columns(2)
 
         def grafica_frecuencia_ranking(df_data, col_bin, titulo):
-            if col_bin not in df_data.columns:
-                return px.line(title=titulo)
+            if col_bin not in df_data.columns: return px.line(title=titulo)
             rank_df = df_data.groupby(col_bin)['Ind Frecuencia médico'].mean().reset_index()
             rank_df.columns = ['Rango de Ranking', 'Frecuencia Promedio']
             rank_df = rank_df.sort_values('Rango de Ranking')
-            fig = px.line(
-                rank_df, x='Rango de Ranking', y='Frecuencia Promedio',
-                markers=True, text='Frecuencia Promedio', template='plotly_dark',
-                title=titulo, color_discrete_sequence=['#0088FF']
-            )
+            fig = px.line(rank_df, x='Rango de Ranking', y='Frecuencia Promedio', markers=True, text='Frecuencia Promedio', template='plotly_dark', title=titulo, color_discrete_sequence=['#0088FF'])
             fig.update_traces(texttemplate='%{text:.2f}', textposition='top center', textfont_size=12, line=dict(width=3))
-            fig.update_layout(
-                paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=370,
-                xaxis_title="Rango de Posición en Ranking", yaxis_title="Frecuencia Promedio",
-                margin=dict(t=50, b=50, l=20, r=20)
-            )
+            fig.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=370, xaxis_title="Rango de Posición en Ranking", yaxis_title="Frecuencia Promedio", margin=dict(t=50, b=50, l=20, r=20))
             return fig
 
         with col_rank1:
@@ -421,74 +363,88 @@ with tab_visitas:
         with col_rank2:
             st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_Allergy', "<b>Frecuencia vs Ranking Allergy</b>"), use_container_width=True)
 
-        # SECCIÓN 4: INSTITUCIÓN ORDENADA POR RANKING Y % FRECUENCIA HORIZONTAL
         st.markdown("---")
         st.subheader("Análisis por Institución: Frecuencia Promedio Ordenada por Ranking")
-
         instituciones_disponibles = sorted(df_final['Institución 1.1'].dropna().unique())
-        selected_instituciones = st.multiselect(
-            "Seleccionar Institución(es) para comparar:",
-            options=instituciones_disponibles,
-            default=instituciones_disponibles[:12] if len(instituciones_disponibles) >= 12 else instituciones_disponibles,
-            key="inst_multiselect"
-        )
+        selected_instituciones = st.multiselect("Seleccionar Institución(es) para comparar:", options=instituciones_disponibles, default=instituciones_disponibles[:12] if len(instituciones_disponibles) >= 12 else instituciones_disponibles, key="inst_multiselect")
 
         if selected_instituciones:
             df_inst_filtered = df_final[df_final['Institución 1.1'].isin(selected_instituciones)]
-            
-            def parse_rank(val):
-                try:
-                    return float(val)
-                except:
-                    return 999999.0
-
-            df_inst_filtered['Numeric_Rank'] = df_inst_filtered['Ranking GCH'].apply(parse_rank)
+            df_inst_filtered['Numeric_Rank'] = df_inst_filtered['Ranking GCH'].apply(lambda x: float(x) if str(x).replace('.','',1).isdigit() else 999999.0)
             
             inst_summary = df_inst_filtered.groupby('Institución 1.1').agg(
                 Best_Ranking=('Numeric_Rank', 'min'),
                 Cantidad_Medicos=('Código', 'count'),
                 Frecuencia_Promedio=('Ind Frecuencia médico', 'mean')
-            ).reset_index()
+            ).reset_index().sort_values(by='Best_Ranking', ascending=True)
             
-            inst_summary = inst_summary.sort_values(by='Best_Ranking', ascending=True)
             inst_summary['Etiqueta_Freq_Pct'] = inst_summary['Frecuencia_Promedio'].apply(lambda x: f"{x * 100:.1f}%")
 
-            fig_bar = px.bar(
-                inst_summary, 
-                x='Institución 1.1', 
-                y='Frecuencia_Promedio',
-                text='Etiqueta_Freq_Pct',
-                template='plotly_dark',
-                title="<b>Índice de Frecuencia Promedio (Ordenado por Ranking)</b>",
-                color_discrete_sequence=['#0088FF']
-            )
-            
-            fig_bar.update_traces(
-                textposition='inside',
-                textfont_size=11,
-                textfont_color='white'
-            )
-            
-            fig_bar.update_layout(
-                paper_bgcolor='#1C202C',
-                plot_bgcolor='#2D3346',
-                height=500,
-                xaxis_title="Institución (Orden de Ranking)",
-                yaxis_title="Índice de Frecuencia Promedio",
-                xaxis={'tickangle': -35},
-                margin=dict(t=60, b=130, l=40, r=20),
-                showlegend=False
-            )
-            
+            fig_bar = px.bar(inst_summary, x='Institución 1.1', y='Frecuencia_Promedio', text='Etiqueta_Freq_Pct', template='plotly_dark', title="<b>Índice de Frecuencia Promedio (Ordenado por Ranking)</b>", color_discrete_sequence=['#0088FF'])
+            fig_bar.update_traces(textposition='inside', textfont_size=11, textfont_color='white')
+            fig_bar.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=500, xaxis_title="Institución (Orden de Ranking)", yaxis_title="Índice de Frecuencia Promedio", xaxis={'tickangle': -35}, margin=dict(t=60, b=130, l=40, r=20), showlegend=False)
             st.plotly_chart(fig_bar, use_container_width=True)
-
-            st.markdown("##### Detalle de Ranking, Frecuencia y Médicos por Institución")
-            inst_summary_display = inst_summary[['Institución 1.1', 'Best_Ranking', 'Frecuencia_Promedio', 'Cantidad_Medicos']].copy()
-            inst_summary_display['Best_Ranking'] = inst_summary_display['Best_Ranking'].apply(lambda x: int(x) if x < 999999 else 'N/A')
-            inst_summary_display.columns = ['Institución', 'Mejor Ranking', 'Frecuencia Promedio', 'Cantidad de Médicos']
-            inst_summary_display['Frecuencia Promedio'] = inst_summary_display['Frecuencia Promedio'].round(2)
-            st.dataframe(inst_summary_display, use_container_width=True, hide_index=True)
-        else:
-            st.info("ℹ️ Por favor selecciona al menos una institución en el filtro superior para visualizar la comparativa.")
     else:
         st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo mediante la barra lateral.")
+
+# =========================================================================
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & CALIDAD DE COMENTARIOS (VENTAS)
+# =========================================================================
+with tab_cualitativa:
+    st.subheader("🔎 Auditoría Cualitativa: Detección de Copy-Paste y Calidad de Ventas")
+    st.markdown("<span style='color: #9AA5B1;'>Evaluación del discurso comercial, análisis de textos repetidos y alineación de los reportes con técnicas profesionales de visita médica.</span>", unsafe_allow_html=True)
+    st.markdown("---")
+
+    # KPIs Cualitativos de Ejemplo (Simulados sobre la estructura de auditoría de comentarios)
+    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+    col_c1.metric("Índice Global de Copy-Paste", "18.4%", "-2.3% vs mes ant.", delta_color="inverse")
+    col_c2.metric("Calidad Promedio Argumentación", "76.5 / 100", "+4.1 pts")
+    col_c3.metric("Visitas con Discurso Estándar", "420", "-12 inst.")
+    col_c4.metric("Alineación Técnica de Ventas", "Buena", "Certificada")
+
+    st.markdown("---")
+    st.subheader("📊 Análisis de Frecuencia de Textos Duplicados (Copy-Paste por Representante)")
+    
+    # Gráfica simulada de ejemplo para auditoría cualitativa de textos repetidos
+    data_copypaste = pd.DataFrame({
+        'Representante': ['Ana María Gómez', 'Carlos Pérez', 'Diana Rodríguez', 'Esteban Ruiz', 'Felipe Torres', 'Gloria Mendieta'],
+        'Porcentaje CopyPaste': [32.5, 24.1, 18.2, 12.0, 8.5, 4.2],
+        'Comentarios Totales': [140, 125, 160, 110, 130, 95]
+    })
+    
+    fig_cp = px.bar(
+        data_copypaste, x='Representante', y='Porcentaje CopyPaste', text='Porcentaje CopyPaste',
+        template='plotly_dark', title="<b>Porcentaje de Comentarios con Patrón 'Copy-Paste' por Representante</b>",
+        color='Porcentaje CopyPaste', color_continuous_scale=['#0088FF', '#E6007E']
+    )
+    fig_cp.update_traces(texttemplate='%{text:.1f}%', textposition='outside', textfont_size=12)
+    fig_cp.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=420, yaxis_title="% de Duplicidad Detectada", margin=dict(t=50, b=40, l=40, r=20))
+    st.plotly_chart(fig_cp, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("💡 Evaluación Cualitativa de Argumentación y Cierre")
+    
+    col_ev1, col_ev2 = st.columns(2)
+    with col_ev1:
+        st.markdown("##### 📌 Principales Hallazgos Positivos")
+        st.markdown("""
+        * **Argumentación de Beneficios:** Los representantes fundamentan correctamente los atributos clínicos del producto en las cuentas Pareto.
+        * **Manejo de Objeciones:** Clara evolución en la respuesta a barreras de disponibilidad institucional.
+        * **Foco en Especialidades:** Correcta priorización de médicos prescriptores de alto valor.
+        """)
+    with col_ev2:
+        st.markdown("##### ⚠️ Oportunidades de Mejora Identificadas")
+        st.markdown("""
+        * **Reportes Genéricos:** Uso de plantillas idénticas (*copy-paste*) en visitas consecutivas a médicos de baja categoría.
+        * **Cierre de Visita:** Falta de acuerdos de prescripción específicos registrados en el feedback.
+        * **Profundidad del Registro:** Comentarios demasiado breves que no reflejan el verdadero diálogo médico.
+        """)
+    
+    st.markdown("---")
+    st.markdown("##### 📋 Matriz Detallada de Auditoría de Comentarios por Visita")
+    if df_frec is not None:
+        # Mostramos una tabla resumen usando el archivo de visitas si contiene observaciones o columnas de notas
+        cols_mostrar = [c for c in ['Representante', 'Institución 1.1', 'Línea', 'Categoría', 'Ind Frecuencia médico'] if c in df_frec.columns]
+        st.dataframe(df_frec[cols_mostrar].head(15), use_container_width=True, hide_index=True)
+    else:
+        st.info("Carga el archivo de visitas en la barra lateral para cruzar los datos con la auditoría cualitativa.")
