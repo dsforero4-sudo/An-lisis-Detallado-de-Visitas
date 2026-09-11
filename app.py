@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import re
 
 # Configuración de página
 st.set_page_config(
@@ -59,7 +60,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- CARGA DE DATOS (MIPRES Y PHARMADVISOR) ---
+# --- CARGA DE DATOS (MIPRES Y VISITAS) ---
 @st.cache_data
 def cargar_datos_mipres(uploaded_file=None):
     source = uploaded_file if uploaded_file is not None else 'Base Mipres.xlsx'
@@ -68,7 +69,6 @@ def cargar_datos_mipres(uploaded_file=None):
     try:
         df = pd.read_excel(source, sheet_name='Consolidado', header=1)
         df.columns = [str(c) for c in df.columns]
-        
         for col in df.columns:
             if '2025' in col or '2026' in col or 'Total general' in col or 'Médicos Visitados' in col:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -78,46 +78,37 @@ def cargar_datos_mipres(uploaded_file=None):
 
 @st.cache_data
 def cargar_datos_visitas(uploaded_file=None):
-    excel_source = uploaded_file if uploaded_file is not None else 'Indicador_frecuencia_medicos.xlsx'
-    if not os.path.exists('Indicador_frecuencia_medicos.xlsx') and uploaded_file is None:
+    excel_source = uploaded_file if uploaded_file is not None else 'listado_visitas_2026-09-07_11-44-08.xlsx'
+    if not os.path.exists('listado_visitas_2026-09-07_11-44-08.xlsx') and uploaded_file is None:
         return None
     try:
         xls = pd.ExcelFile(excel_source)
         df = pd.read_excel(excel_source, sheet_name=xls.sheet_names[0])
         
-        df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
-        df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
-        df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
+        df['Torta_GCH'] = df['Pareto institución'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
+        df['Torta_Allergy'] = df['Torta_GCH']
+        df['Torta_Comb'] = df['Torta_GCH']
         
         def bin_ranking(val):
-            try:
-                v = float(val)
-                if v <= 50: return '1. Top 50'
-                elif v <= 200: return '2. 51 - 200'
-                elif v <= 500: return '3. 201 - 500'
-                elif v <= 1000: return '4. 501 - 1000'
-                else: return '5. 1000+'
-            except:
-                return '6. Sin Ranking / No Cruza'
-
-        if 'Ranking GCH' in df.columns:
-            df['Ranking_Bin_GCH'] = df['Ranking GCH'].apply(bin_ranking)
-        if 'Ranking Allergy' in df.columns:
-            df['Ranking_Bin_Allergy'] = df['Ranking Allergy'].apply(bin_ranking)
-            
+            return '1. Top Institución'
+        df['Ranking_Bin_GCH'] = '1. General'
+        df['Ranking_Bin_Allergy'] = '1. General'
+        df['Ind Frecuencia médico'] = 1.0 # Indicador base
+        df['Institución 1.1'] = df['Institución 1']
+        
         return df
     except Exception as e:
         return None
 
 # --- CARGADORES EN BARRA LATERAL ---
 st.sidebar.subheader("Carga de Archivos")
-uploaded_visitas = st.sidebar.file_uploader("Cargar Indicador Frecuencia (Excel)", type=["xlsx"], key="visitas_up")
+uploaded_visitas = st.sidebar.file_uploader("Cargar Listado Visitas (Excel)", type=["xlsx"], key="visitas_up")
 uploaded_mipres = st.sidebar.file_uploader("Cargar Base Mipres (Excel)", type=["xlsx"], key="mipres_up")
 
 df_frec = cargar_datos_visitas(uploaded_visitas)
 df_mipres = cargar_datos_mipres(uploaded_mipres)
 
-# --- SELECTOR DE MERCADO / LÍNEA ---
+# --- SELECTOR DE MERCADO ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("Selección de Mercado")
 mercado_seleccionado = st.sidebar.selectbox(
@@ -126,7 +117,6 @@ mercado_seleccionado = st.sidebar.selectbox(
     index=0
 )
 
-# Definir variables dinámicas según el mercado elegido
 if mercado_seleccionado == "Growth (GCH)":
     col_vol_2026 = '2026'
     col_pareto = 'Pareto GCH'
@@ -140,7 +130,6 @@ else:
     col_pareto = 'Pareto_Consolidado'
     col_visita = 'Visita_Consolidado'
 
-# --- DEFINICIÓN DE LAS TRES PESTAÑAS PRINCIPALES ---
 tab_mipres, tab_visitas, tab_cualitativa = st.tabs([
     "📊 Inteligencia Mipres & Oportunidades", 
     "📈 Auditoría de Visitas & Paretización", 
@@ -148,7 +137,7 @@ tab_mipres, tab_visitas, tab_cualitativa = st.tabs([
 ])
 
 # =========================================================================
-# PESTAÑA 1: INTELIGENCIA MIPRES & OPORTUNIDADES COMERCIALES (ESTRATÉGICA)
+# PESTAÑA 1: INTELIGENCIA MIPRES & OPORTUNIDADES COMERCIALES
 # =========================================================================
 with tab_mipres:
     st.subheader(f"Tablero Estratégico y Potencial de Mercado - Línea {mercado_seleccionado} (Base Mipres)")
@@ -174,7 +163,6 @@ with tab_mipres:
 
         st.sidebar.markdown("---")
         st.sidebar.subheader("Filtros Estratégicos Mipres")
-        
         regiones_mipres = sorted(df_mipres['Región'].dropna().unique()) if 'Región' in df_mipres.columns else []
         selected_regiones = st.sidebar.multiselect("Región Mipres", options=regiones_mipres, default=regiones_mipres, key="reg_mipres")
         
@@ -202,21 +190,10 @@ with tab_mipres:
             df_non_pareto = df_mercado_valido[df_mercado_valido[col_pareto] == 'No']
             non_pareto_visitadas = len(df_non_pareto[df_non_pareto[col_visita] == 'Sí'])
             
-            if 'Médicos Visitados' in df_mercado_valido.columns:
-                prom_medicos_pareto = df_pareto_only['Médicos Visitados'].mean()
-                prom_medicos_non_pareto = df_non_pareto['Médicos Visitados'].mean()
-            else:
-                prom_medicos_pareto = 0
-                prom_medicos_non_pareto = 0
+            prom_medicos_pareto = df_pareto_only['Médicos Visitados'].mean() if 'Médicos Visitados' in df_mercado_valido.columns else 0
+            prom_medicos_non_pareto = df_non_pareto['Médicos Visitados'].mean() if 'Médicos Visitados' in df_mercado_valido.columns else 0
         else:
-            total_pareto = 0
-            pct_pareto_sobre_total = 0
-            pareto_visitadas = 0
-            pareto_no_visitadas = 0
-            pct_no_visitadas_pareto = 0
-            non_pareto_visitadas = 0
-            prom_medicos_pareto = 0
-            prom_medicos_non_pareto = 0
+            total_pareto, pct_pareto_sobre_total, pareto_visitadas, pareto_no_visitadas, pct_no_visitadas_pareto, non_pareto_visitadas, prom_medicos_pareto, prom_medicos_non_pareto = 0, 0, 0, 0, 0, 0, 0, 0
 
         st.markdown('<div class="kpi-section-title">1. Dimensionamiento del Mercado</div>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
@@ -235,9 +212,7 @@ with tab_mipres:
         col7.metric("Prom. Médicos Visitados (Pareto)", f"{prom_medicos_pareto:.1f}")
         col8.metric("Prom. Médicos Visitados (No Pareto)", f"{prom_medicos_non_pareto:.1f}")
 
-        st.markdown("<span style='color: #9AA5B1; font-size: 12px; display: block; margin-top: 15px;'>* Nota analítica: El total del mercado excluye las instituciones no aplicables para el segmento. Los datos de 2026 corresponden al primer semestre (H1).</span>", unsafe_allow_html=True)
         st.markdown("---")
-        
         st.subheader(f"🎯 Top 20 Instituciones Pareto de Alto Volumen SIN Visita ({mercado_seleccionado})")
         if col_pareto in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
             df_brecha_pareto = df_mipres_filtered[
@@ -254,8 +229,6 @@ with tab_mipres:
                 fig_brecha.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=11)
                 fig_brecha.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=480, xaxis={'tickangle': -35}, yaxis_title="Volumen Semestral Mipres (2026 H1)", margin=dict(t=50, b=130, l=40, r=20))
                 st.plotly_chart(fig_brecha, use_container_width=True)
-            else:
-                st.success("🎉 ¡Excelente cobertura! Todas las instituciones Pareto de este mercado están siendo visitadas.")
 
         st.markdown("---")
         st.subheader(f"📊 Top 20 Instituciones por Volumen Mipres y su Estatus de Visita ({mercado_seleccionado})")
@@ -275,176 +248,67 @@ with tab_mipres:
         st.markdown("##### Auditoría Completa de Oportunidades Mipres")
         st.dataframe(df_mipres_filtered, use_container_width=True, hide_index=True)
     else:
-        st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante la barra lateral para habilitar la inteligencia comercial.")
+        st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (PHARMADVISOR)
+# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN
 # =========================================================================
 with tab_visitas:
     st.subheader("Auditoría Comercial y Frecuencia de Visita (Pharmadvisor)")
-    
     if df_frec is not None:
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("Filtros Comerciales Pharmadvisor")
-
-        distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique())
-        selected_distritos = st.sidebar.multiselect("Distrito", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
+        st.markdown(f"<span style='color: #9AA5B1; font-size: 15px;'>Mostrando análisis para <b>{len(df_frec):,}</b> registros de visitas cargados.</span>", unsafe_allow_html=True)
+        st.markdown("---")
+        st.subheader("Distribución de Visitas por Tipo de Clasificación Institucional")
         
-        df_filtered = df_frec[df_frec['Distrito'].isin(selected_distritos)]
-        lineas_disponibles = sorted(df_filtered['Línea'].dropna().unique())
-        selected_lineas = st.sidebar.multiselect("Línea", options=lineas_disponibles, default=lineas_disponibles, key="lin_ph")
-        
-        df_filtered = df_filtered[df_filtered['Línea'].isin(selected_lineas)]
-        categorias_disponibles = sorted(df_filtered['Categoría'].dropna().unique())
-        selected_categorias = st.sidebar.multiselect("Categoría del Médico", options=categorias_disponibles, default=categorias_disponibles, key="cat_ph")
-        
-        df_filtered = df_filtered[df_filtered['Categoría'].isin(selected_categorias)]
-        representantes_disponibles = sorted(df_filtered['Representante'].dropna().unique())
-        selected_representantes = st.sidebar.multiselect("Representante", options=representantes_disponibles, default=representantes_disponibles, key="rep_ph")
-
-        df_final = df_filtered[df_filtered['Representante'].isin(selected_representantes)]
-        st.markdown(f"<span style='color: #9AA5B1; font-size: 15px;'>Mostrando análisis para <b>{len(df_final):,}</b> registros médicos seleccionados.</span>", unsafe_allow_html=True)
-        st.markdown("---")
-
-        st.subheader("Distribución de Médicos por Tipo de Clasificación Institucional (Pareto vs. No Pareto)")
-        col1, col2, col3 = st.columns(3)
-        color_map = {'Inst. Pareto': '#0088FF', 'Inst. No Pareto': '#E6007E'}
-
-        def estilizar_grafica_con_cantidad(df_data, titulo, col_categoria):
-            grouped = df_data.groupby(col_categoria)['Código'].count().reset_index()
-            grouped.columns = ['Categoría', 'Médicos']
-            fig = px.pie(grouped, names='Categoría', values='Médicos', hole=0.5, title=titulo, color='Categoría', color_discrete_map=color_map, template='plotly_dark')
-            fig.update_traces(textinfo='percent+value', textposition='inside', insidetextorientation='horizontal', textfont_size=12)
-            fig.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=370, showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5), margin=dict(t=50, b=60, l=20, r=20))
-            return fig
-
-        with col1:
-            st.plotly_chart(estilizar_grafica_con_cantidad(df_final, "<b>1. Mercado Growth (GCH)</b>", 'Torta_GCH'), use_container_width=True)
-        with col2:
-            st.plotly_chart(estilizar_grafica_con_cantidad(df_final, "<b>2. Mercado Allergy</b>", 'Torta_Allergy'), use_container_width=True)
-        with col3:
-            st.plotly_chart(estilizar_grafica_con_cantidad(df_final, "<b>3. Mercados Combinados</b>", 'Torta_Comb'), use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("Índice de Frecuencia Promedio de Visita: Pareto vs No Pareto")
-        col_freq1, col_freq2, col_freq3 = st.columns(3)
-
-        def grafica_frecuencia_barras(df_data, titulo, col_cat):
-            freq_df = df_data.groupby(col_cat)['Ind Frecuencia médico'].mean().reset_index()
-            freq_df.columns = ['Clasificación', 'Frecuencia Promedio']
-            fig = px.bar(freq_df, x='Clasificación', y='Frecuencia Promedio', text='Frecuencia Promedio', color='Clasificación', color_discrete_map=color_map, template='plotly_dark', title=titulo)
-            fig.update_traces(texttemplate='%{text:.2f}', textposition='outside', textfont_size=13)
-            fig.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=340, showlegend=False, xaxis_title="", yaxis_title="Índice Promedio", margin=dict(t=50, b=30, l=20, r=20))
-            return fig
-
-        with col_freq1:
-            st.plotly_chart(grafica_frecuencia_barras(df_final, "<b>Frecuencia GCH</b>", 'Torta_GCH'), use_container_width=True)
-        with col_freq2:
-            st.plotly_chart(grafica_frecuencia_barras(df_final, "<b>Frecuencia Allergy</b>", 'Torta_Allergy'), use_container_width=True)
-        with col_freq3:
-            st.plotly_chart(grafica_frecuencia_barras(df_final, "<b>Frecuencia Combinada</b>", 'Torta_Comb'), use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("Índice de Frecuencia Promedio según Posición en el Ranking de Paretización")
-        col_rank1, col_rank2 = st.columns(2)
-
-        def grafica_frecuencia_ranking(df_data, col_bin, titulo):
-            if col_bin not in df_data.columns: return px.line(title=titulo)
-            rank_df = df_data.groupby(col_bin)['Ind Frecuencia médico'].mean().reset_index()
-            rank_df.columns = ['Rango de Ranking', 'Frecuencia Promedio']
-            rank_df = rank_df.sort_values('Rango de Ranking')
-            fig = px.line(rank_df, x='Rango de Ranking', y='Frecuencia Promedio', markers=True, text='Frecuencia Promedio', template='plotly_dark', title=titulo, color_discrete_sequence=['#0088FF'])
-            fig.update_traces(texttemplate='%{text:.2f}', textposition='top center', textfont_size=12, line=dict(width=3))
-            fig.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=370, xaxis_title="Rango de Posición en Ranking", yaxis_title="Frecuencia Promedio", margin=dict(t=50, b=50, l=20, r=20))
-            return fig
-
-        with col_rank1:
-            st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_GCH', "<b>Frecuencia vs Ranking GCH</b>"), use_container_width=True)
-        with col_rank2:
-            st.plotly_chart(grafica_frecuencia_ranking(df_final, 'Ranking_Bin_Allergy', "<b>Frecuencia vs Ranking Allergy</b>"), use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("Análisis por Institución: Frecuencia Promedio Ordenada por Ranking")
-        instituciones_disponibles = sorted(df_final['Institución 1.1'].dropna().unique())
-        selected_instituciones = st.multiselect("Seleccionar Institución(es) para comparar:", options=instituciones_disponibles, default=instituciones_disponibles[:12] if len(instituciones_disponibles) >= 12 else instituciones_disponibles, key="inst_multiselect")
-
-        if selected_instituciones:
-            df_inst_filtered = df_final[df_final['Institución 1.1'].isin(selected_instituciones)]
-            df_inst_filtered['Numeric_Rank'] = df_inst_filtered['Ranking GCH'].apply(lambda x: float(x) if str(x).replace('.','',1).isdigit() else 999999.0)
-            
-            inst_summary = df_inst_filtered.groupby('Institución 1.1').agg(
-                Best_Ranking=('Numeric_Rank', 'min'),
-                Cantidad_Medicos=('Código', 'count'),
-                Frecuencia_Promedio=('Ind Frecuencia médico', 'mean')
-            ).reset_index().sort_values(by='Best_Ranking', ascending=True)
-            
-            inst_summary['Etiqueta_Freq_Pct'] = inst_summary['Frecuencia_Promedio'].apply(lambda x: f"{x * 100:.1f}%")
-
-            fig_bar = px.bar(inst_summary, x='Institución 1.1', y='Frecuencia_Promedio', text='Etiqueta_Freq_Pct', template='plotly_dark', title="<b>Índice de Frecuencia Promedio (Ordenado por Ranking)</b>", color_discrete_sequence=['#0088FF'])
-            fig_bar.update_traces(textposition='inside', textfont_size=11, textfont_color='white')
-            fig_bar.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=500, xaxis_title="Institución (Orden de Ranking)", yaxis_title="Índice de Frecuencia Promedio", xaxis={'tickangle': -35}, margin=dict(t=60, b=130, l=40, r=20), showlegend=False)
-            st.plotly_chart(fig_bar, use_container_width=True)
+        grouped = df_frec.groupby('Pareto institución')['Cod. visita'].count().reset_index()
+        grouped.columns = ['Clasificación', 'Visitas']
+        fig_pie = px.pie(grouped, names='Clasificación', values='Visitas', hole=0.5, template='plotly_dark', color_discrete_sequence=['#0088FF', '#E6007E', '#7B2CBF'])
+        fig_pie.update_traces(textinfo='percent+value', textposition='inside')
+        st.plotly_chart(fig_pie, use_container_width=True)
     else:
-        st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo mediante la barra lateral.")
+        st.warning("⚠️ No se encontró el archivo de visitas. Súbelo mediante la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & CALIDAD DE COMENTARIOS (VENTAS)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (CON DATOS REALES DE COMENTARIOS)
 # =========================================================================
 with tab_cualitativa:
-    st.subheader("🔎 Auditoría Cualitativa: Detección de Copy-Paste y Calidad de Ventas")
-    st.markdown("<span style='color: #9AA5B1;'>Evaluación del discurso comercial, análisis de textos repetidos y alineación de los reportes con técnicas profesionales de visita médica.</span>", unsafe_allow_html=True)
+    st.subheader("🔎 Auditoría Cualitativa: Detección de Copy-Paste en Comentarios de Visitas")
+    st.markdown("<span style='color: #9AA5B1;'>Análisis de duplicidad de textos, frases repetidas y calidad de registro de la fuerza de ventas basado en el archivo de visitas cargado.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # KPIs Cualitativos de Ejemplo (Simulados sobre la estructura de auditoría de comentarios)
-    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
-    col_c1.metric("Índice Global de Copy-Paste", "18.4%", "-2.3% vs mes ant.", delta_color="inverse")
-    col_c2.metric("Calidad Promedio Argumentación", "76.5 / 100", "+4.1 pts")
-    col_c3.metric("Visitas con Discurso Estándar", "420", "-12 inst.")
-    col_c4.metric("Alineación Técnica de Ventas", "Buena", "Certificada")
-
-    st.markdown("---")
-    st.subheader("📊 Análisis de Frecuencia de Textos Duplicados (Copy-Paste por Representante)")
-    
-    # Gráfica simulada de ejemplo para auditoría cualitativa de textos repetidos
-    data_copypaste = pd.DataFrame({
-        'Representante': ['Ana María Gómez', 'Carlos Pérez', 'Diana Rodríguez', 'Esteban Ruiz', 'Felipe Torres', 'Gloria Mendieta'],
-        'Porcentaje CopyPaste': [32.5, 24.1, 18.2, 12.0, 8.5, 4.2],
-        'Comentarios Totales': [140, 125, 160, 110, 130, 95]
-    })
-    
-    fig_cp = px.bar(
-        data_copypaste, x='Representante', y='Porcentaje CopyPaste', text='Porcentaje CopyPaste',
-        template='plotly_dark', title="<b>Porcentaje de Comentarios con Patrón 'Copy-Paste' por Representante</b>",
-        color='Porcentaje CopyPaste', color_continuous_scale=['#0088FF', '#E6007E']
-    )
-    fig_cp.update_traces(texttemplate='%{text:.1f}%', textposition='outside', textfont_size=12)
-    fig_cp.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=420, yaxis_title="% de Duplicidad Detectada", margin=dict(t=50, b=40, l=40, r=20))
-    st.plotly_chart(fig_cp, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("💡 Evaluación Cualitativa de Argumentación y Cierre")
-    
-    col_ev1, col_ev2 = st.columns(2)
-    with col_ev1:
-        st.markdown("##### 📌 Principales Hallazgos Positivos")
-        st.markdown("""
-        * **Argumentación de Beneficios:** Los representantes fundamentan correctamente los atributos clínicos del producto en las cuentas Pareto.
-        * **Manejo de Objeciones:** Clara evolución en la respuesta a barreras de disponibilidad institucional.
-        * **Foco en Especialidades:** Correcta priorización de médicos prescriptores de alto valor.
-        """)
-    with col_ev2:
-        st.markdown("##### ⚠️ Oportunidades de Mejora Identificadas")
-        st.markdown("""
-        * **Reportes Genéricos:** Uso de plantillas idénticas (*copy-paste*) en visitas consecutivas a médicos de baja categoría.
-        * **Cierre de Visita:** Falta de acuerdos de prescripción específicos registrados en el feedback.
-        * **Profundidad del Registro:** Comentarios demasiado breves que no reflejan el verdadero diálogo médico.
-        """)
-    
-    st.markdown("---")
-    st.markdown("##### 📋 Matriz Detallada de Auditoría de Comentarios por Visita")
     if df_frec is not None:
-        # Mostramos una tabla resumen usando el archivo de visitas si contiene observaciones o columnas de notas
-        cols_mostrar = [c for c in ['Representante', 'Institución 1.1', 'Línea', 'Categoría', 'Ind Frecuencia médico'] if c in df_frec.columns]
-        st.dataframe(df_frec[cols_mostrar].head(15), use_container_width=True, hide_index=True)
+        df_frec['Comentario_Clean'] = df_frec['Comentario'].astype(str).str.strip().str.lower()
+        df_frec['Comentario_Clean'] = df_frec['Comentario_Clean'].apply(lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', x)))
+        
+        total_visitas_q = len(df_frec)
+        rep_dup = df_frec.groupby('Representante')['Comentario_Clean'].apply(lambda x: (x.duplicated()).sum()).reset_index(name='Duplicados')
+        rep_tot = df_frec.groupby('Representante')['Comentario_Clean'].count().reset_index(name='Total')
+        rep_metrics = pd.merge(rep_tot, rep_dup)
+        rep_metrics['Pct_CopyPaste'] = (rep_metrics['Duplicados'] / rep_metrics['Total']) * 100
+        
+        global_dup_count = rep_metrics['Duplicados'].sum()
+        global_total_count = rep_metrics['Total'].sum()
+        global_pct_cp = (global_dup_count / global_total_count) * 100 if global_total_count > 0 else 0
+
+        col_qc1, col_qc2, col_qc3 = st.columns(3)
+        col_qc1.metric("Índice Global de Duplicidad (Copy-Paste)", f"{global_pct_cp:.1f}%")
+        col_qc2.metric("Comentarios Analizados", f"{global_total_count:,}")
+        col_qc3.metric("Comentarios Duplicados Detectados", f"{global_dup_count:,}")
+
+        st.markdown("---")
+        st.subheader("📊 Porcentaje de Comentarios Repetidos (Copy-Paste) por Representante")
+        
+        fig_rep_cp = px.bar(
+            rep_metrics.sort_values(by='Pct_CopyPaste', ascending=False),
+            x='Representante', y='Pct_CopyPaste', text='Pct_CopyPaste',
+            template='plotly_dark', title="<b>Índice de Copy-Paste por Representante</b>",
+            color='Pct_CopyPaste', color_continuous_scale=['#0088FF', '#E6007E']
+        )
+        fig_rep_cp.update_traces(texttemplate='%{text:.1f}%', textposition='outside', textfont_size=10)
+        fig_rep_cp.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=480, xaxis={'tickangle': -35}, yaxis_title="% Duplicidad Interna", margin=dict(t=50, b=140, l=40, r=20))
+        st.plotly_chart(fig_rep_cp, use_container_width=True)
+
+        st.markdown("##### Muestra de Comentarios y Objetivos Registrados")
+        st.dataframe(df_frec[['Representante', 'Fecha visita', 'Institución 1', 'Objetivo', 'Comentario']].head(15), use_container_width=True, hide_index=True)
     else:
-        st.info("Carga el archivo de visitas en la barra lateral para cruzar los datos con la auditoría cualitativa.")
+        st.warning("⚠️ Carga el listado detallado de visitas en la barra lateral para procesar la auditoría cualitativa con datos reales.")
