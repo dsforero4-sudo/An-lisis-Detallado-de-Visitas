@@ -94,10 +94,12 @@ def cargar_datos_frecuencia(uploaded_file=None):
     try:
         xls = pd.ExcelFile(excel_source)
         df = pd.read_excel(excel_source, sheet_name=xls.sheet_names[0])
+        
         if 'Pareto 1' in df.columns:
             df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
             df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
             df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
+            
         return df
     except Exception as e:
         return None
@@ -276,10 +278,10 @@ with tab_mipres:
         st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante el segundo cargador en la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (FRECUENCIA VS PARETIZACIÓN)
+# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (TENDENCIA POR RANKING)
 # =========================================================================
 with tab_visitas:
-    st.subheader("Auditoría Comercial y Frecuencia a la Luz de la Paretización")
+    st.subheader("Auditoría Comercial y Tendencia de Frecuencia por Rangos de Ranking Institucional")
     if df_frec is not None:
         distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique()) if 'Distrito' in df_frec.columns else []
         selected_distritos = st.sidebar.multiselect("Distrito (Pestaña 2)", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
@@ -310,28 +312,46 @@ with tab_visitas:
             st.plotly_chart(estilizar_grafica_con_cantidad(df_filtered, "<b>3. Mercados Combinados</b>", 'Torta_Comb'), use_container_width=True)
 
         st.markdown("---")
-        st.subheader("📊 Indicador de Frecuencia por Médico a la Luz de la Paretización Institucional")
+        st.subheader("📈 Tendencia del Indicador de Frecuencia por Grupos de Ranking Institucional")
         
-        # Búsqueda de la columna de frecuencia por médico y cruce con Pareto 1
+        # Búsqueda de columna de frecuencia y columna de ranking o posición
         possible_freq_cols = [c for c in df_filtered.columns if any(w in str(c).lower() for w in ['frecuencia', 'indicador', 'visita', 'veces'])]
         freq_col = possible_freq_cols[0] if possible_freq_cols else None
-        
-        if freq_col and 'Pareto 1' in df_filtered.columns and 'Distrito' in df_filtered.columns:
-            # Agrupar por Distrito y Categoria Pareto para comparar el indicador de frecuencia
-            df_cruce_pareto = df_filtered.groupby(['Distrito', 'Pareto 1'])[freq_col].mean().reset_index()
-            df_cruce_pareto.columns = ['Distrito', 'Clasificación Pareto', 'Promedio_Frecuencia']
-            
-            fig_cruce_p = px.bar(
-                df_cruce_pareto, x='Distrito', y='Promedio_Frecuencia', color='Clasificación Pareto', barmode='group',
-                text='Promedio_Frecuencia', template='plotly_dark',
-                title=f"<b>Comparativa del Indicador de Frecuencia ({freq_col}) por Distrito y Pareto Institucional</b>",
-                color_discrete_sequence=['#0088FF', '#E6007E', '#FFC107', '#2ECC71']
-            )
-            fig_cruce_p.update_traces(texttemplate='%{text:,.2f}', textposition='outside', textfont_size=10)
-            fig_cruce_p.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=500, xaxis={'tickangle': -30}, yaxis_title="Promedio Frecuencia por Médico", margin=dict(t=50, b=90, l=40, r=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-            st.plotly_chart(fig_cruce_p, use_container_width=True)
+
+        possible_rank_cols = [c for c in df_filtered.columns if any(w in str(c).lower() for w in ['ranking', 'puesto', 'orden', 'posicion', 'decil', 'segmento', 'pareto'])]
+        rank_col = possible_rank_cols[0] if possible_rank_cols else None
+
+        if freq_col:
+            df_trend = df_filtered.copy()
+            if rank_col and pd.api.types.is_numeric_dtype(df_trend[rank_col]):
+                # Crear rangos de 50 en 50 según el ranking numérico
+                max_rank = df_trend[rank_col].max()
+                bins = [0, 50, 100, 200, 500, max_rank + 1]
+                labels = ['1 a 50', '51 a 100', '101 a 200', '201 a 500', f'501 a {int(max_rank)}']
+                df_trend['Rango_Ranking'] = pd.cut(df_trend[rank_col], bins=bins, labels=labels, include_lowest=True)
+                group_col = 'Rango_Ranking'
+                title_suffix = "por Rangos de Ranking"
+            else:
+                # Si no hay ranking numérico explícito, agrupamos por Pareto o Categoría como proxy de jerarquía
+                group_col = 'Pareto 1' if 'Pareto 1' in df_trend.columns else ('Torta_Comb' if 'Torta_Comb' in df_trend.columns else None)
+                title_suffix = "por Clasificación Institucional (Pareto)"
+
+            if group_col:
+                df_grouped_trend = df_trend.groupby(group_col)[freq_col].mean().reset_index()
+                df_grouped_trend.columns = ['Grupo', 'Promedio_Frecuencia']
+                
+                fig_trend = px.line(
+                    df_grouped_trend, x='Grupo', y='Promedio_Frecuencia', markers=True, text='Promedio_Frecuencia',
+                    template='plotly_dark', title=f"<b>Tendencia del Indicador de Frecuencia ({freq_col}) {title_suffix}</b>",
+                    color_discrete_sequence=['#0088FF']
+                )
+                fig_trend.update_traces(texttemplate='%{text:,.2f}', textposition='top center', textfont_size=12, line=dict(width=3))
+                fig_trend.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, xaxis_title="Grupo / Rango Institucional", yaxis_title="Promedio Frecuencia", margin=dict(t=50, b=40, l=40, r=20))
+                st.plotly_chart(fig_trend, use_container_width=True)
+            else:
+                st.info("⚠️ No se pudo determinar una agrupación por ranking en el archivo.")
         else:
-            st.info("⚠️ No se encontró la columna exacta de indicador de frecuencia combinada con Pareto 1 en este archivo, pero los datos generales están disponibles.")
+            st.warning("⚠️ No se encontró la columna de indicador de frecuencia en el archivo cargado.")
     else:
         st.warning("⚠️ Por favor carga el archivo **Indicador Frecuencia** en el primer cargador de la barra lateral.")
 
