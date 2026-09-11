@@ -307,11 +307,11 @@ with tab_visitas:
         st.warning("⚠️ Por favor carga el archivo 'Indicador Frecuencia' en el primer cargador de la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (SECUENCIA ACTUALIZADA)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (CON CALIDAD DE VISITAS AUTÉNTICAS)
 # =========================================================================
 with tab_cualitativa:
-    st.subheader("🔎 Auditoría Cualitativa: Copy-Paste, Impactos Promocionales y Ejes Temáticos")
-    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) con filtros en cascada, nivel de copy-paste por coordinación y por representante, impactos promocionales y ejes temáticos.</span>", unsafe_allow_html=True)
+    st.subheader("🔎 Auditoría Cualitativa: Modelo de Calidad Pharmadvisor, Copy-Paste y Ejes Temáticos")
+    st.markdown("<span style='color: #9AA5B1;'>Evaluación basada en visitas auténticas (excluyendo copy-paste masivo) alineada con los 7 pasos y el modelo de persuasión de Pharmadvisor.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     if df_det is not None:
@@ -337,13 +337,54 @@ with tab_cualitativa:
             selected_pareto_q = st.sidebar.multiselect("Pareto Institución", options=pareto_q, default=pareto_q, key="q_par")
             df_filtered_raw = df_q3[df_q3['Pareto institución'].isin(selected_pareto_q)]
 
-            # CONSOLIDAR POR VISITA ÚNICA PARA COPY-PASTE
-            df_filtered_q = df_filtered_raw.drop_duplicates(subset=['Cod. visita']).copy()
-            df_filtered_q['Comentario_Clean'] = df_filtered_q['Comentario'].astype(str).str.strip().str.lower()
-            df_filtered_q['Comentario_Clean'] = df_filtered_q['Comentario_Clean'].apply(lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', x)))
+            # CONSOLIDAR POR VISITA ÚNICA PARA COPY-PASTE Y CALIDAD
+            df_unique_f = df_filtered_raw.drop_duplicates(subset=['Cod. visita']).copy()
+            df_unique_f['Comentario_Clean'] = df_unique_f['Comentario'].astype(str).str.strip().str.lower()
+            df_unique_f['Comentario_Clean'] = df_unique_f['Comentario_Clean'].apply(lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', x)))
             
+            comment_counts_f = df_unique_f['Comentario_Clean'].value_counts()
+            df_unique_f['Is_Duplicated'] = df_unique_f['Comentario_Clean'].isin(comment_counts_f[comment_counts_f > 1].index)
+
+            # Clasificación de Visitas Auténticas según Modelo Pharmadvisor
+            def classify_visit(row):
+                if row['Is_Duplicated']:
+                    return 'Copy-Paste / Masivo'
+                text = str(row['Comentario']).lower()
+                if any(w in text for w in ['acuerdo', 'compromiso', 'inicia', 'formula', 'receta', 'acepta', 'empezará', 'iniciará', 'formulacion', 'formula']):
+                    return 'Alta Calidad (Persuasión / Cierre)'
+                elif len(text.strip()) < 40 or any(w in text for w in ['incentivar', 'posicionar', 'recordar']):
+                    return 'Baja Calidad (Trámite / Genérico)'
+                else:
+                    return 'Calidad Media (Historia de Beneficios)'
+
+            df_unique_f['Quality_Category'] = df_unique_f.apply(classify_visit, axis=1)
+            df_authentic = df_unique_f[~df_unique_f['Is_Duplicated']].copy()
+
+            # --- GRÁFICA 0: CALIDAD DE VISITA (MODELO PHARMADVISOR - AUTÉNTICAS) ---
+            st.subheader("📊 1. Calidad de Visita (Modelo Pharmadvisor - Visitas Auténticas)")
+            
+            qual_counts = df_authentic['Quality_Category'].value_counts().reset_index()
+            qual_counts.columns = ['Nivel de Calidad', 'Visitas']
+            
+            color_qual_map = {
+                'Calidad Media (Historia de Beneficios)': '#FFC107',
+                'Alta Calidad (Persuasión / Cierre)': '#2ECC71',
+                'Baja Calidad (Trámite / Genérico)': '#E6007E'
+            }
+
+            fig_qual = px.pie(
+                qual_counts, names='Nivel de Calidad', values='Visitas', hole=0.5,
+                template='plotly_dark', title="<b>Distribución de Calidad en Visitas Auténticas</b>",
+                color='Nivel de Calidad', color_discrete_map=color_qual_map
+            )
+            fig_qual.update_traces(textinfo='percent+value', textposition='inside', textfont_size=12)
+            fig_qual.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=400, margin=dict(t=50, b=30, l=20, r=20))
+            st.plotly_chart(fig_qual, use_container_width=True)
+
+            st.markdown("---")
+
             # --- GRÁFICA 1: COMPARATIVA DE LAS 4 COORDINACIONES (% COPY-PASTE) ---
-            st.subheader("📊 1. Comparativa General de las 4 Coordinaciones (Nivel de Copy-Paste)")
+            st.subheader("📊 2. Comparativa General de las 4 Coordinaciones (Nivel de Copy-Paste)")
             
             coord_summary = df_det.drop_duplicates(subset=['Cod. visita']).copy()
             coord_summary['Comentario_Clean'] = coord_summary['Comentario'].astype(str).str.strip().str.lower()
@@ -367,16 +408,16 @@ with tab_cualitativa:
             st.markdown("---")
             
             # --- GRÁFICA 2: PORCENTAJE DE COMENTARIOS REPETIDOS POR REPRESENTANTE ---
-            st.subheader("📊 2. Porcentaje de Comentarios Repetidos por Representante (Visitas Únicas)")
+            st.subheader("📊 3. Porcentaje de Comentarios Repetidos por Representante (Visitas Únicas)")
             
-            total_visitas_f = len(df_filtered_q)
-            dup_visitas_f = df_filtered_q['Comentario_Clean'].duplicated().sum()
+            total_visitas_f = len(df_unique_f)
+            dup_visitas_f = df_unique_f['Is_Duplicated'].sum()
             pct_cp_f = (dup_visitas_f / total_visitas_f) * 100 if total_visitas_f > 0 else 0
 
             if total_visitas_f > 0:
-                rep_metrics_f = df_filtered_q.groupby('Representante').agg(
+                rep_metrics_f = df_unique_f.groupby('Representante').agg(
                     Total=('Cod. visita', 'count'),
-                    Duplicados=('Comentario_Clean', lambda x: x.duplicated().sum())
+                    Duplicados=('Is_Duplicated', 'sum')
                 ).reset_index()
                 rep_metrics_f['Pct_CopyPaste'] = (rep_metrics_f['Duplicados'] / rep_metrics_f['Total']) * 100
 
@@ -395,7 +436,7 @@ with tab_cualitativa:
             st.markdown("---")
 
             # --- GRÁFICA 3: IMPACTOS PROMOCIONALES ---
-            st.subheader("📊 3. Impactos promocionales")
+            st.subheader("📊 4. Impactos promocionales")
             df_impactos = df_filtered_raw[df_filtered_raw['Impactos'].astype(str).str.strip() != '-']
             sov_counts = df_impactos['Impactos'].value_counts().reset_index()
             sov_counts.columns = ['Producto', 'Visitas']
@@ -412,8 +453,8 @@ with tab_cualitativa:
             st.markdown("---")
 
             # --- GRÁFICA 4: EJES TEMÁTICOS Y BARRERAS EN CONSULTORIO ---
-            st.subheader("📊 4. Ejes Temáticos y Barreras Detectadas en Consultorio")
-            ejes_counts = df_filtered_q['Eje_Tematico'].value_counts().reset_index()
+            st.subheader("📊 5. Ejes Temáticos y Barreras Detectadas en Consultorio")
+            ejes_counts = df_unique_f['Eje_Tematico'].value_counts().reset_index()
             ejes_counts.columns = ['Eje Tematico', 'Visitas']
 
             fig_ejes = px.bar(
@@ -434,8 +475,8 @@ with tab_cualitativa:
 
             st.markdown("---")
             st.markdown("##### Detalle de Visitas Únicas Filtradas")
-            display_cols = [c for c in ['Cod. visita', 'Región', 'Línea', 'Representante', 'Pareto institución', 'Fecha visita', 'Institución 1', 'Comentario'] if c in df_filtered_q.columns]
-            st.dataframe(df_filtered_q[display_cols].head(25), use_container_width=True, hide_index=True)
+            display_cols = [c for c in ['Cod. visita', 'Región', 'Línea', 'Representante', 'Pareto institución', 'Fecha visita', 'Institución 1', 'Comentario'] if c in df_unique_f.columns]
+            st.dataframe(df_unique_f[display_cols].head(25), use_container_width=True, hide_index=True)
         else:
             st.error("El archivo de visitas no contiene las columnas necesarias para aplicar estos filtros.")
     else:
