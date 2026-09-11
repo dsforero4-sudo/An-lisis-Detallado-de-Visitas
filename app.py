@@ -61,37 +61,45 @@ def cargar_datos_mipres(uploaded_file=None):
         return None
 
 @st.cache_data
-def cargar_datos_visitas():
-    if not os.path.exists('Indicador_frecuencia_medicos.xlsx'):
+def cargar_datos_visitas(uploaded_file=None):
+    excel_source = uploaded_file if uploaded_file is not None else 'Indicador_frecuencia_medicos.xlsx'
+    if not os.path.exists('Indicador_frecuencia_medicos.xlsx') and uploaded_file is None:
         return None
-    xls = pd.ExcelFile('Indicador_frecuencia_medicos.xlsx')
-    df = pd.read_excel('Indicador_frecuencia_medicos.xlsx', sheet_name=xls.sheet_names[0])
-    
-    df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
-    df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
-    df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
-    
-    def bin_ranking(val):
-        try:
-            v = float(val)
-            if v <= 50: return '1. Top 50'
-            elif v <= 200: return '2. 51 - 200'
-            elif v <= 500: return '3. 201 - 500'
-            elif v <= 1000: return '4. 501 - 1000'
-            else: return '5. 1000+'
-        except:
-            return '6. Sin Ranking / No Cruza'
-
-    if 'Ranking GCH' in df.columns:
-        df['Ranking_Bin_GCH'] = df['Ranking GCH'].apply(bin_ranking)
-    if 'Ranking Allergy' in df.columns:
-        df['Ranking_Bin_Allergy'] = df['Ranking Allergy'].apply(bin_ranking)
+    try:
+        xls = pd.ExcelFile(excel_source)
+        df = pd.read_excel(excel_source, sheet_name=xls.sheet_names[0])
         
-    return df
+        df['Torta_GCH'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH'] else 'Inst. No Pareto')
+        df['Torta_Allergy'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto Allergy'] else 'Inst. No Pareto')
+        df['Torta_Comb'] = df['Pareto 1'].apply(lambda x: 'Inst. Pareto' if str(x) in ['Pareto Ambas', 'Pareto GCH', 'Pareto Allergy'] else 'Inst. No Pareto')
+        
+        def bin_ranking(val):
+            try:
+                v = float(val)
+                if v <= 50: return '1. Top 50'
+                elif v <= 200: return '2. 51 - 200'
+                elif v <= 500: return '3. 201 - 500'
+                elif v <= 1000: return '4. 501 - 1000'
+                else: return '5. 1000+'
+            except:
+                return '6. Sin Ranking / No Cruza'
 
+        if 'Ranking GCH' in df.columns:
+            df['Ranking_Bin_GCH'] = df['Ranking GCH'].apply(bin_ranking)
+        if 'Ranking Allergy' in df.columns:
+            df['Ranking_Bin_Allergy'] = df['Ranking Allergy'].apply(bin_ranking)
+            
+        return df
+    except Exception as e:
+        return None
+
+# --- CARGADORES EN BARRA LATERAL ---
+st.sidebar.subheader("Carga de Archivos")
+uploaded_visitas = st.sidebar.file_uploader("Cargar Indicador Frecuencia (Excel)", type=["xlsx"], key="visitas_up")
 uploaded_mipres = st.sidebar.file_uploader("Cargar Base Mipres (Excel)", type=["xlsx"], key="mipres_up")
+
+df_frec = cargar_datos_visitas(uploaded_visitas)
 df_mipres = cargar_datos_mipres(uploaded_mipres)
-df_frec = cargar_datos_visitas()
 
 # --- DEFINICIÓN DE PESTAÑAS PRINCIPALES ---
 tab_mipres, tab_visitas = st.tabs(["📊 Análisis Mipres & Oportunidades", "📈 Auditoría de Visitas & Paretización"])
@@ -103,7 +111,6 @@ with tab_mipres:
     st.subheader("Inteligencia de Prescripción y Oportunidades (Consolidado Mipres)")
     
     if df_mipres is not None:
-        # Filtros Mipres en barra lateral o superior
         st.sidebar.markdown("---")
         st.sidebar.subheader("Filtros Base Mipres")
         
@@ -112,7 +119,6 @@ with tab_mipres:
         
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
-        # KPIs principales
         total_vol_2026 = df_mipres_filtered['2026'].sum() if '2026' in df_mipres_filtered.columns else 0
         total_instituciones = len(df_mipres_filtered)
         
@@ -120,12 +126,10 @@ with tab_mipres:
         kpi1.metric("Instituciones Analizadas (Mipres)", f"{total_instituciones:,}")
         kpi2.metric("Volumen Prescripción 2026", f"{total_vol_2026:,.1f}")
         
-        # Oportunidades: Instituciones de alto volumen que NO se visitan (Se visita Growth? == 'No' o similar)
         st.markdown("---")
         st.subheader("Oportunidades Comerciales: Instituciones de Alto Volumen sin Visita Comercial")
         
         if 'Se visita Growth?' in df_mipres_filtered.columns and 'Total general' in df_mipres_filtered.columns:
-            # Ordenar por volumen total general
             df_oportunidades = df_mipres_filtered.sort_values(by='Total general', ascending=False).head(15)
             
             fig_mipres = px.bar(
@@ -149,7 +153,7 @@ with tab_mipres:
         st.markdown("##### Detalle de Instituciones Mipres")
         st.dataframe(df_mipres_filtered.head(100), use_container_width=True, hide_index=True)
     else:
-        st.warning("⚠️ No se encontró el archivo 'Base Mipres.xlsx'. Súbelo mediante la barra lateral.")
+        st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante el botón superior en la barra lateral.")
 
 # ==========================================
 # PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN
@@ -337,4 +341,4 @@ with tab_visitas:
         else:
             st.info("ℹ️ Por favor selecciona al menos una institución en el filtro superior para visualizar la comparativa.")
     else:
-        st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo a la raíz del repositorio.")
+        st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo mediante la barra lateral.")
