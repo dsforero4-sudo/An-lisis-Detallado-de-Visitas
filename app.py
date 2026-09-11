@@ -56,7 +56,6 @@ def cargar_datos_mipres(uploaded_file=None):
         return None
     try:
         df = pd.read_excel(source, sheet_name='Consolidado', header=1)
-        # Forzar conversión numérica en todas las columnas de años o totales
         for col in df.columns:
             if '2025' in str(col) or '2026' in str(col) or 'Total general' in str(col):
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -123,7 +122,6 @@ with tab_mipres:
         
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
-        # Identificar columna exacta de 2026 y 2025
         col_2026 = next((c for c in df_mipres_filtered.columns if '2026' in str(c) and '.' not in str(c)), '2026')
         col_2025 = next((c for c in df_mipres_filtered.columns if '2025' in str(c) and '.' not in str(c)), '2025')
         
@@ -131,34 +129,40 @@ with tab_mipres:
         total_vol_2025 = df_mipres_filtered[col_2025].sum(skipna=True) if col_2025 in df_mipres_filtered.columns else 0
         crecimiento_mercado = ((total_vol_2026 - total_vol_2025) / total_vol_2025 * 100) if total_vol_2025 > 0 else 0
         
-        # Porcentaje de instituciones sin visita comercial Growth
-        if 'Se visita Growth?' in df_mipres_filtered.columns:
-            sin_visita_count = len(df_mipres_filtered[df_mipres_filtered['Se visita Growth?'] == 'No'])
-            pct_sin_visita = (sin_visita_count / len(df_mipres_filtered) * 100) if len(df_mipres_filtered) > 0 else 0
+        # --- CÁLCULO DE BRECHA DE COBERTURA EXCLUSIVO PARA PARETO GCH ---
+        if 'Pareto GCH' in df_mipres_filtered.columns and 'Se visita Growth?' in df_mipres_filtered.columns:
+            df_pareto_only = df_mipres_filtered[df_mipres_filtered['Pareto GCH'] == 'Sí']
+            total_pareto = len(df_pareto_only)
+            sin_visita_pareto = len(df_pareto_only[df_pareto_only['Se visita Growth?'] == 'No'])
+            pct_brecha_pareto = (sin_visita_pareto / total_pareto * 100) if total_pareto > 0 else 0
         else:
-            pct_sin_visita = 0
+            pct_brecha_pareto = 0
+            total_pareto = len(df_mipres_filtered)
 
         kpi1, kpi2, kpi3 = st.columns(3)
         kpi1.metric("Volumen Total Mipres (2026)", f"{total_vol_2026:,.1f}", delta=f"{crecimiento_mercado:+.1f}% vs 2025")
-        kpi2.metric("Instituciones Analizadas", f"{len(df_mipres_filtered):,}")
-        kpi3.metric("Brecha de Cobertura (Sin Visita Growth)", f"{pct_sin_visita:.1f}%", delta_color="inverse")
+        kpi2.metric("Instituciones Pareto Analizadas", f"{total_pareto:,}")
+        kpi3.metric("Brecha en Cuentas Pareto (Sin Visita)", f"{pct_brecha_pareto:.1f}%", delta_color="inverse")
 
         st.markdown("---")
         
-        # 1. ANÁLISIS DE CUENTAS CLAVE NO VISITADAS (TOP 15 OPORTUNIDADES)
-        st.subheader("🎯 Top 15 Instituciones de Alto Volumen Comercial SIN Visita (Oportunidad de Apertura)")
+        # 1. ANÁLISIS DE CUENTAS CLAVE PARETO NO VISITADAS (TOP 15 OPORTUNIDADES)
+        st.subheader("🎯 Top 15 Instituciones Pareto de Alto Volumen SIN Visita (Oportunidad Clave)")
         
-        if 'Se visita Growth?' in df_mipres_filtered.columns and 'Total general' in df_mipres_filtered.columns:
-            df_brecha = df_mipres_filtered[df_mipres_filtered['Se visita Growth?'] == 'No'].sort_values(by='Total general', ascending=False, na_position='last').head(15)
+        if 'Pareto GCH' in df_mipres_filtered.columns and 'Se visita Growth?' in df_mipres_filtered.columns and 'Total general' in df_mipres_filtered.columns:
+            df_brecha_pareto = df_mipres_filtered[
+                (df_mipres_filtered['Pareto GCH'] == 'Sí') & 
+                (df_mipres_filtered['Se visita Growth?'] == 'No')
+            ].sort_values(by='Total general', ascending=False, na_position='last').head(15)
             
-            if not df_brecha.empty:
+            if not df_brecha_pareto.empty:
                 fig_brecha = px.bar(
-                    df_brecha,
+                    df_brecha_pareto,
                     x='Prestador',
                     y='Total general',
                     text='Total general',
                     template='plotly_dark',
-                    title="<b>Potencial No Capturado (Volumen Mipres en Instituciones No Visitadas)</b>",
+                    title="<b>Potencial en Instituciones Pareto No Visitadas (Mercado Growth)</b>",
                     color_discrete_sequence=['#E6007E']
                 )
                 fig_brecha.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=11)
@@ -172,7 +176,7 @@ with tab_mipres:
                 )
                 st.plotly_chart(fig_brecha, use_container_width=True)
             else:
-                st.success("🎉 ¡Excelente cobertura! No hay instituciones en esta selección con estatus 'No' en visitas Growth.")
+                st.success("🎉 ¡Excelente cobertura! Todas las instituciones Pareto están siendo visitadas.")
 
         st.markdown("---")
 
