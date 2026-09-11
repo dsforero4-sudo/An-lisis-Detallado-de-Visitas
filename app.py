@@ -104,6 +104,29 @@ uploaded_mipres = st.sidebar.file_uploader("Cargar Base Mipres (Excel)", type=["
 df_frec = cargar_datos_visitas(uploaded_visitas)
 df_mipres = cargar_datos_mipres(uploaded_mipres)
 
+# --- SELECTOR DE MERCADO / LÍNEA (GCH vs ALLERGY) ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("Selección de Mercado")
+mercado_seleccionado = st.sidebar.selectbox(
+    "Línea Estratégica:",
+    options=["Growth (GCH)", "Allergy"],
+    index=0
+)
+
+# Definir variables dinámicas según el mercado elegido
+if mercado_seleccionado == "Growth (GCH)":
+    col_vol_2025 = '2025'
+    col_vol_2026 = '2026'
+    col_pareto = 'Pareto GCH'
+    col_visita = 'Se visita Growth?'
+    col_ranking = 'Ranking GCH'
+else:
+    col_vol_2025 = '2025.1'
+    col_vol_2026 = '2026.1'
+    col_pareto = 'Pareto Allergy'
+    col_visita = 'Se visita Allergy?'
+    col_ranking = 'Ranking Allergy'
+
 # --- DEFINICIÓN DE PESTAÑAS PRINCIPALES ---
 tab_mipres, tab_visitas = st.tabs(["📊 Inteligencia Mipres & Oportunidades", "📈 Auditoría de Visitas & Paretización"])
 
@@ -111,7 +134,7 @@ tab_mipres, tab_visitas = st.tabs(["📊 Inteligencia Mipres & Oportunidades", "
 # PESTAÑA 1: INTELIGENCIA MIPRES & OPORTUNIDADES COMERCIALES (ESTRATÉGICA)
 # =========================================================================
 with tab_mipres:
-    st.subheader("Tablero de Oportunidades Estratégicas y Potencial de Mercado (Base Mipres)")
+    st.subheader(f"Tablero Estratégico y Potencial de Mercado - Línea {mercado_seleccionado} (Base Mipres)")
     
     if df_mipres is not None:
         st.sidebar.markdown("---")
@@ -122,47 +145,44 @@ with tab_mipres:
         
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
-        col_2026 = next((c for c in df_mipres_filtered.columns if '2026' in str(c) and '.' not in str(c)), '2026')
-        col_2025 = next((c for c in df_mipres_filtered.columns if '2025' in str(c) and '.' not in str(c)), '2025')
+        total_vol_2026_s1 = df_mipres_filtered[col_vol_2026].sum(skipna=True) if col_vol_2026 in df_mipres_filtered.columns else 0
+        total_vol_2025_full = df_mipres_filtered[col_vol_2025].sum(skipna=True) if col_vol_2025 in df_mipres_filtered.columns else 0
         
-        total_vol_2026 = df_mipres_filtered[col_2026].sum(skipna=True) if col_2026 in df_mipres_filtered.columns else 0
-        total_vol_2025 = df_mipres_filtered[col_2025].sum(skipna=True) if col_2025 in df_mipres_filtered.columns else 0
-        crecimiento_mercado = ((total_vol_2026 - total_vol_2025) / total_vol_2025 * 100) if total_vol_2025 > 0 else 0
-        
-        # --- CÁLCULO DE BRECHA DE COBERTURA EXCLUSIVO PARA PARETO GCH ---
-        if 'Pareto GCH' in df_mipres_filtered.columns and 'Se visita Growth?' in df_mipres_filtered.columns:
-            df_pareto_only = df_mipres_filtered[df_mipres_filtered['Pareto GCH'] == 'Sí']
+        # --- CÁLCULO DE BRECHA DE COBERTURA EXCLUSIVO PARA PARETO SEGÚN MERCADO ---
+        if col_pareto in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
+            df_pareto_only = df_mipres_filtered[df_mipres_filtered[col_pareto] == 'Sí']
             total_pareto = len(df_pareto_only)
-            sin_visita_pareto = len(df_pareto_only[df_pareto_only['Se visita Growth?'] == 'No'])
+            sin_visita_pareto = len(df_pareto_only[df_pareto_only[col_visita] == 'No'])
             pct_brecha_pareto = (sin_visita_pareto / total_pareto * 100) if total_pareto > 0 else 0
         else:
             pct_brecha_pareto = 0
             total_pareto = len(df_mipres_filtered)
 
         kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric("Volumen Total Mipres (2026)", f"{total_vol_2026:,.1f}", delta=f"{crecimiento_mercado:+.1f}% vs 2025")
-        kpi2.metric("Instituciones Pareto Analizadas", f"{total_pareto:,}")
+        kpi1.metric("Volumen Acumulado H1 2026", f"{total_vol_2026_s1:,.1f}", delta="Primeros 2 Trimestres", delta_color="off")
+        kpi2.metric(f"Instituciones Pareto ({mercado_seleccionado})", f"{total_pareto:,}")
         kpi3.metric("Brecha en Cuentas Pareto (Sin Visita)", f"{pct_brecha_pareto:.1f}%", delta_color="inverse")
 
+        st.markdown("<span style='color: #9AA5B1; font-size: 12px;'>* Nota analítica: Los datos de 2026 reflejan la ejecución real del primer semestre (H1). Se presentan de forma independiente frente al consolidado anual 2025 para evitar sesgos de estacionalidad.</span>", unsafe_allow_html=True)
         st.markdown("---")
         
-        # 1. ANÁLISIS DE CUENTAS CLAVE PARETO NO VISITADAS (TOP 15 OPORTUNIDADES)
-        st.subheader("🎯 Top 15 Instituciones Pareto de Alto Volumen SIN Visita (Oportunidad Clave)")
+        # 1. ANÁLISIS DE CUENTAS CLAVE PARETO NO VISITADAS
+        st.subheader(f"🎯 Top 15 Instituciones Pareto de Alto Volumen SIN Visita ({mercado_seleccionado})")
         
-        if 'Pareto GCH' in df_mipres_filtered.columns and 'Se visita Growth?' in df_mipres_filtered.columns and 'Total general' in df_mipres_filtered.columns:
+        if col_pareto in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
             df_brecha_pareto = df_mipres_filtered[
-                (df_mipres_filtered['Pareto GCH'] == 'Sí') & 
-                (df_mipres_filtered['Se visita Growth?'] == 'No')
-            ].sort_values(by='Total general', ascending=False, na_position='last').head(15)
+                (df_mipres_filtered[col_pareto] == 'Sí') & 
+                (df_mipres_filtered[col_visita] == 'No')
+            ].sort_values(by=col_vol_2026, ascending=False, na_position='last').head(15)
             
             if not df_brecha_pareto.empty:
                 fig_brecha = px.bar(
                     df_brecha_pareto,
                     x='Prestador',
-                    y='Total general',
-                    text='Total general',
+                    y=col_vol_2026,
+                    text=col_vol_2026,
                     template='plotly_dark',
-                    title="<b>Potencial en Instituciones Pareto No Visitadas (Mercado Growth)</b>",
+                    title=f"<b>Potencial en Instituciones Pareto No Visitadas ({mercado_seleccionado})</b>",
                     color_discrete_sequence=['#E6007E']
                 )
                 fig_brecha.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=11)
@@ -171,32 +191,32 @@ with tab_mipres:
                     plot_bgcolor='#2D3346',
                     height=450,
                     xaxis={'tickangle': -35},
-                    yaxis_title="Volumen Acumulado Mipres",
+                    yaxis_title="Volumen Semestral Mipres (2026 H1)",
                     margin=dict(t=50, b=120, l=40, r=20)
                 )
                 st.plotly_chart(fig_brecha, use_container_width=True)
             else:
-                st.success("🎉 ¡Excelente cobertura! Todas las instituciones Pareto están siendo visitadas.")
+                st.success("🎉 ¡Excelente cobertura! Todas las instituciones Pareto de este mercado están siendo visitadas.")
 
         st.markdown("---")
 
-        # 2. COMPARATIVA DE CRECIMIENTO 2025 vs 2026 POR INSTITUCIÓN PARETO
-        st.subheader("📈 Dinámica de Prescripción: Comparativo de Volumen 2025 vs 2026")
+        # 2. COMPARATIVA DE VOLUMEN H1 2026 vs 2025
+        st.subheader("📈 Dinámica de Prescripción: 2025 Completo vs H1 2026")
         
-        if col_2025 in df_mipres_filtered.columns and col_2026 in df_mipres_filtered.columns:
-            df_dinamica = df_mipres_filtered.sort_values(by='Total general', ascending=False, na_position='last').head(12)
-            df_melted = df_dinamica.melt(id_vars=['Prestador', 'Región'], value_vars=[col_2025, col_2026], var_name='Año', value_name='Volumen')
-            df_melted['Año'] = df_melted['Año'].astype(str).str.replace('.1', '', regex=False)
+        if col_vol_2025 in df_mipres_filtered.columns and col_vol_2026 in df_mipres_filtered.columns:
+            df_dinamica = df_mipres_filtered.sort_values(by=col_vol_2026, ascending=False, na_position='last').head(12)
+            df_melted = df_dinamica.melt(id_vars=['Prestador', 'Región'], value_vars=[col_vol_2025, col_vol_2026], var_name='Periodo', value_name='Volumen')
+            df_melted['Periodo'] = df_melted['Periodo'].apply(lambda x: '2025 (Anual)' if '2025' in str(x) else '2026 (H1)')
             
             fig_dinamica = px.bar(
                 df_melted,
                 x='Prestador',
                 y='Volumen',
-                color='Año',
+                color='Periodo',
                 barmode='group',
                 template='plotly_dark',
-                title="<b>Evolución del Volumen de Prescripción por Institución Líder</b>",
-                color_discrete_map={'2025': '#9AA5B1', '2026': '#0088FF'}
+                title=f"<b>Evolución del Volumen ({mercado_seleccionado})</b>",
+                color_discrete_map={'2025 (Anual)': '#9AA5B1', '2026 (H1)': '#0088FF'}
             )
             fig_dinamica.update_layout(
                 paper_bgcolor='#1C202C',
