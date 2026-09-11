@@ -117,28 +117,28 @@ uploaded_mipres = st.sidebar.file_uploader("Cargar Base Mipres (Excel)", type=["
 df_frec = cargar_datos_visitas(uploaded_visitas)
 df_mipres = cargar_datos_mipres(uploaded_mipres)
 
-# --- SELECTOR DE MERCADO / LÍNEA (GCH vs ALLERGY) ---
+# --- SELECTOR DE MERCADO / LÍNEA ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("Selección de Mercado")
 mercado_seleccionado = st.sidebar.selectbox(
     "Línea Estratégica:",
-    options=["Growth (GCH)", "Allergy"],
+    options=["Growth (GCH)", "Allergy", "Consolidado Total (GCH + Allergy)"],
     index=0
 )
 
 # Definir variables dinámicas según el mercado elegido
 if mercado_seleccionado == "Growth (GCH)":
-    col_vol_2025 = '2025'
     col_vol_2026 = '2026'
     col_pareto = 'Pareto GCH'
     col_visita = 'Se visita Growth?'
-    col_ranking = 'Ranking GCH'
-else:
-    col_vol_2025 = '2025.1'
+elif mercado_seleccionado == "Allergy":
     col_vol_2026 = '2026.1'
     col_pareto = 'Pareto Allergy'
     col_visita = 'Se visita Allergy?'
-    col_ranking = 'Ranking Allergy'
+else:
+    col_vol_2026 = 'Vol_Consolidado'
+    col_pareto = 'Pareto_Consolidado'
+    col_visita = 'Visita_Consolidado'
 
 # --- DEFINICIÓN DE PESTAÑAS PRINCIPALES ---
 tab_mipres, tab_visitas = st.tabs(["📊 Inteligencia Mipres & Oportunidades", "📈 Auditoría de Visitas & Paretización"])
@@ -150,6 +150,25 @@ with tab_mipres:
     st.subheader(f"Tablero Estratégico y Potencial de Mercado - Línea {mercado_seleccionado} (Base Mipres)")
     
     if df_mipres is not None:
+        # Si se selecciona Consolidado, preparamos las columnas calculadas
+        if mercado_seleccionado == "Consolidado Total (GCH + Allergy)":
+            df_mipres['Vol_Consolidado'] = df_mipres['2026'].fillna(0) + df_mipres['2026.1'].fillna(0)
+            
+            def is_pareto_cons(row):
+                pg = str(row.get('Pareto GCH', ''))
+                pa = str(row.get('Pareto Allergy', ''))
+                if 'Sí' in pg or 'Sí' in pa: return 'Sí'
+                elif 'No está en' in pg and 'No está en' in pa: return 'No aplica'
+                else: return 'No'
+            df_mipres['Pareto_Consolidado'] = df_mipres.apply(is_pareto_cons, axis=1)
+
+            def is_visita_cons(row):
+                vg = str(row.get('Se visita Growth?', ''))
+                va = str(row.get('Se visita Allergy?', ''))
+                if 'Sí' in vg or 'Sí' in va: return 'Sí'
+                return 'No'
+            df_mipres['Visita_Consolidado'] = df_mipres.apply(is_visita_cons, axis=1)
+
         st.sidebar.markdown("---")
         st.sidebar.subheader("Filtros Estratégicos Mipres")
         
@@ -160,7 +179,10 @@ with tab_mipres:
         
         # --- CÁLCULOS EXCLUYENDO "No está en..." ---
         if col_pareto in df_mipres_filtered.columns:
-            df_mercado_valido = df_mipres_filtered[~df_mipres_filtered[col_pareto].astype(str).str.contains('No está en', case=False, na=False)]
+            if mercado_seleccionado == "Consolidado Total (GCH + Allergy)":
+                df_mercado_valido = df_mipres_filtered[df_mipres_filtered[col_pareto] != 'No aplica']
+            else:
+                df_mercado_valido = df_mipres_filtered[~df_mipres_filtered[col_pareto].astype(str).str.contains('No está en', case=False, na=False)]
         else:
             df_mercado_valido = df_mipres_filtered
             
