@@ -149,37 +149,48 @@ with tab_mipres:
         
         total_vol_2026_s1 = df_mipres_filtered[col_vol_2026].sum(skipna=True) if col_vol_2026 in df_mipres_filtered.columns else 0
         
-        # --- CÁLCULOS DE COBERTURA Y PARETO ---
-        total_mercado = len(df_mipres_filtered)
+        # --- CÁLCULOS EXCLUYENDO "No está en..." ---
+        if col_pareto in df_mipres_filtered.columns:
+            df_mercado_valido = df_mipres_filtered[~df_mipres_filtered[col_pareto].astype(str).str.contains('No está en', case=False, na=False)]
+        else:
+            df_mercado_valido = df_mipres_filtered
+            
+        total_mercado_valido = len(df_mercado_valido)
         
-        if col_pareto in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
-            df_pareto_only = df_mipres_filtered[df_mipres_filtered[col_pareto] == 'Sí']
+        if col_pareto in df_mercado_valido.columns and col_visita in df_mercado_valido.columns:
+            df_pareto_only = df_mercado_valido[df_mercado_valido[col_pareto] == 'Sí']
             total_pareto = len(df_pareto_only)
-            pct_pareto_sobre_total = (total_pareto / total_mercado * 100) if total_mercado > 0 else 0
+            pct_pareto_sobre_total = (total_pareto / total_mercado_valido * 100) if total_mercado_valido > 0 else 0
             
             pareto_visitadas = len(df_pareto_only[df_pareto_only[col_visita] == 'Sí'])
             pareto_no_visitadas = len(df_pareto_only[df_pareto_only[col_visita] == 'No'])
             pct_no_visitadas_pareto = (pareto_no_visitadas / total_pareto * 100) if total_pareto > 0 else 0
+            
+            df_non_pareto = df_mercado_valido[df_mercado_valido[col_pareto] == 'No']
+            non_pareto_visitadas = len(df_non_pareto[df_non_pareto[col_visita] == 'Sí'])
         else:
             total_pareto = 0
             pct_pareto_sobre_total = 0
             pareto_visitadas = 0
             pareto_no_visitadas = 0
             pct_no_visitadas_pareto = 0
+            non_pareto_visitadas = 0
 
         # FILA 1 DE KPIS
-        kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric("Volumen Acumulado H1 2026", f"{total_vol_2026_s1:,.1f}", delta="Primeros 2 Trimestres", delta_color="off")
-        kpi2.metric("Total Instituciones del Mercado", f"{total_mercado:,}")
-        kpi3.metric("Instituciones Pareto", f"{total_pareto:,} ({pct_pareto_sobre_total:.1f}% del total)")
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1.metric("Volumen H1 2026", f"{total_vol_2026_s1:,.1f}")
+        kpi2.metric("Total Instituciones Mercado", f"{total_mercado_valido:,}")
+        kpi3.metric("Instituciones Pareto", f"{total_pareto:,}")
+        kpi4.metric("% Pareto sobre Total", f"{pct_pareto_sobre_total:.1f}%")
 
-        # FILA 2 DE KPIS (Específicas de Pareto y Visitas)
-        kpi4, kpi5, kpi6 = st.columns(3)
-        kpi4.metric("Pareto Visitadas", f"{pareto_visitadas:,}")
-        kpi5.metric("Pareto No Visitadas", f"{pareto_no_visitadas:,}")
-        kpi6.metric("Brecha Pareto (Sin Visita)", f"{pct_no_visitadas_pareto:.1f}%", delta_color="inverse")
+        # FILA 2 DE KPIS
+        kpi5, kpi6, kpi7, kpi8 = st.columns(4)
+        kpi5.metric("Pareto Visitadas", f"{pareto_visitadas:,}")
+        kpi6.metric("Pareto No Visitadas", f"{pareto_no_visitadas:,}")
+        kpi7.metric("% Pareto Sin Visita (Brecha)", f"{pct_no_visitadas_pareto:.1f}%")
+        kpi8.metric("No Pareto Visitadas", f"{non_pareto_visitadas:,}")
 
-        st.markdown("<span style='color: #9AA5B1; font-size: 12px;'>* Nota analítica: Los datos de 2026 reflejan la ejecución real del primer semestre (H1). Se presentan de forma independiente frente al consolidado anual 2025 para evitar sesgos de estacionalidad.</span>", unsafe_allow_html=True)
+        st.markdown("<span style='color: #9AA5B1; font-size: 12px;'>* Nota analítica: El total del mercado excluye las instituciones no aplicables para el segmento. Los datos de 2026 corresponden al primer semestre (H1).</span>", unsafe_allow_html=True)
         st.markdown("---")
         
         # 1. ANÁLISIS DE CUENTAS CLAVE PARETO NO VISITADAS
@@ -437,4 +448,4 @@ with tab_visitas:
         else:
             st.info("ℹ️ Por favor selecciona al menos una institución en el filtro superior para visualizar la comparativa.")
     else:
-        st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo mediante la barra lateral.")
+        st.warning("⚠️ No se encontró el archivo 'Indicador_frecuencia_medicos.xlsx'. Súbelo mediante la barra lateral."
