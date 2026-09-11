@@ -292,11 +292,11 @@ with tab_visitas:
         st.warning("⚠️ Por favor carga el archivo 'Indicador Frecuencia' en el primer cargador de la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (CONSOLIDADO POR VISITA ÚNICA)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (BARRAS = NIVEL DE COPY-PASTE)
 # =========================================================================
 with tab_cualitativa:
     st.subheader("🔎 Auditoría Cualitativa: Detección de Copy-Paste y Rendimiento por Coordinación")
-    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) para evitar duplicidad de conteo, con filtros en cascada y comparativa de coordinaciones.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) para mostrar el nivel de copy-paste en las barras, con filtros en cascada y comparativa de coordinaciones.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     if df_det is not None:
@@ -306,33 +306,29 @@ with tab_cualitativa:
             st.sidebar.markdown("---")
             st.sidebar.subheader("Filtros en Cascada (Pestaña 3)")
             
-            # 1. Filtro Región
             regiones_q = sorted(df_det['Región'].dropna().unique())
             selected_regiones_q = st.sidebar.multiselect("Región (Coordinación)", options=regiones_q, default=regiones_q, key="q_reg")
             df_q1 = df_det[df_det['Región'].isin(selected_regiones_q)]
             
-            # 2. Filtro Línea
             lineas_q = sorted(df_q1['Línea'].dropna().unique())
             selected_lineas_q = st.sidebar.multiselect("Línea", options=lineas_q, default=lineas_q, key="q_lin")
             df_q2 = df_q1[df_q1['Línea'].isin(selected_lineas_q)]
             
-            # 3. Filtro Representante
             reps_q = sorted(df_q2['Representante'].dropna().unique())
             selected_reps_q = st.sidebar.multiselect("Representante", options=reps_q, default=reps_q, key="q_rep")
             df_q3 = df_q2[df_q2['Representante'].isin(selected_reps_q)]
             
-            # 4. Filtro Pareto
             pareto_q = sorted(df_q3['Pareto institución'].dropna().unique())
             selected_pareto_q = st.sidebar.multiselect("Pareto Institución", options=pareto_q, default=pareto_q, key="q_par")
             df_filtered_raw = df_q3[df_q3['Pareto institución'].isin(selected_pareto_q)]
 
-            # CONSOLIDAR POR VISITA ÚNICA (Cod. visita) PARA ANÁLISIS CUALITATIVO
+            # CONSOLIDAR POR VISITA ÚNICA (Cod. visita)
             df_filtered_q = df_filtered_raw.drop_duplicates(subset=['Cod. visita']).copy()
             df_filtered_q['Comentario_Clean'] = df_filtered_q['Comentario'].astype(str).str.strip().str.lower()
             df_filtered_q['Comentario_Clean'] = df_filtered_q['Comentario_Clean'].apply(lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', x)))
             
-            # --- GRÁFICA 1: COMPARATIVA DE LAS 4 COORDINACIONES (Consolidado por Visita Única) ---
-            st.subheader("📊 Comparativa General de las 4 Coordinaciones (Visitas Únicas vs % Copy-Paste)")
+            # --- GRÁFICA 1: COMPARATIVA DE LAS 4 COORDINACIONES (Barras = % Copy-Paste) ---
+            st.subheader("📊 Comparativa General de las 4 Coordinaciones (Nivel de Copy-Paste)")
             
             coord_summary = df_det.drop_duplicates(subset=['Cod. visita']).copy()
             coord_summary['Comentario_Clean'] = coord_summary['Comentario'].astype(str).str.strip().str.lower()
@@ -345,17 +341,16 @@ with tab_cualitativa:
             coord_grouped['Pct_CopyPaste'] = (coord_grouped['Duplicados'] / coord_grouped['Total_Visitas']) * 100
 
             fig_coord = px.bar(
-                coord_grouped, x='Región', y='Total_Visitas', text='Pct_CopyPaste',
-                template='plotly_dark', title="<b>Visitas Únicas y % de Copy-Paste por Coordinación</b>",
+                coord_grouped, x='Región', y='Pct_CopyPaste', text='Pct_CopyPaste',
+                template='plotly_dark', title="<b>Nivel de Copy-Paste (%) por Coordinación</b>",
                 color='Pct_CopyPaste', color_continuous_scale=['#0088FF', '#E6007E']
             )
-            fig_coord.update_traces(texttemplate='Copy-Paste: %{text:.1f}%', textposition='outside', textfont_size=12)
-            fig_coord.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, yaxis_title="Total de Visitas Únicas", margin=dict(t=50, b=40, l=40, r=20))
+            fig_coord.update_traces(texttemplate='%{text:.1f}%', textposition='outside', textfont_size=12)
+            fig_coord.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=450, yaxis_title="% de Copy-Paste", margin=dict(t=50, b=40, l=40, r=20))
             st.plotly_chart(fig_coord, use_container_width=True)
 
             st.markdown("---")
             
-            # Métricas KPI filtradas por visita única
             total_visitas_f = len(df_filtered_q)
             dup_visitas_f = df_filtered_q['Comentario_Clean'].duplicated().sum()
             pct_cp_f = (dup_visitas_f / total_visitas_f) * 100 if total_visitas_f > 0 else 0
