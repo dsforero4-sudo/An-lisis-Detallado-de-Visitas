@@ -308,11 +308,11 @@ with tab_visitas:
         st.warning("⚠️ Por favor carga el archivo 'Indicador Frecuencia' en el primer cargador de la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (FILTROS EN CASCADA + GRÁFICAS CLAVE)
+# PESTAÑA 3: AUDITORÍA CUALITATIVA & VENTAS (FILTROS EN CASCADA + IMPACTOS PROMOCIONALES)
 # =========================================================================
 with tab_cualitativa:
-    st.subheader("🔎 Auditoría Cualitativa: Copy-Paste, Share of Voice y Ejes Temáticos")
-    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) con filtros en cascada, nivel de copy-paste, menciones por producto y ejes temáticos en consultorio.</span>", unsafe_allow_html=True)
+    st.subheader("🔎 Auditoría Cualitativa: Copy-Paste, Impactos Promocionales y Ejes Temáticos")
+    st.markdown("<span style='color: #9AA5B1;'>Análisis consolidado por visita única (Columna I: Cod. visita) con filtros en cascada, nivel de copy-paste, impactos promocionales y ejes temáticos en consultorio.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     if df_det is not None:
@@ -367,16 +367,15 @@ with tab_cualitativa:
 
             st.markdown("---")
             
-            # --- GRÁFICA 2: MENCIONES POR PRODUCTO (SHARE OF VOICE) ---
-            st.subheader("📊 2. Menciones por Producto (Share of Voice)")
-            # Usamos df_filtered_raw (todas las filas) para contar impactos/productos correctamente
+            # --- GRÁFICA 2: IMPACTOS PROMOCIONALES ---
+            st.subheader("📊 2. Impactos promocionales")
             df_impactos = df_filtered_raw[df_filtered_raw['Impactos'].astype(str).str.strip() != '-']
             sov_counts = df_impactos['Impactos'].value_counts().reset_index()
             sov_counts.columns = ['Producto', 'Visitas']
 
             fig_sov = px.bar(
                 sov_counts, x='Producto', y='Visitas', text='Visitas',
-                template='plotly_dark', title="<b>Share of Voice por Producto (Impactos Registrados)</b>",
+                template='plotly_dark', title="<b>Impactos Promocionales (Registrados por Visita)</b>",
                 color='Visitas', color_continuous_scale=['#0088FF', '#00E5FF']
             )
             fig_sov.update_traces(texttemplate='%{text:,}', textposition='outside', textfont_size=11)
