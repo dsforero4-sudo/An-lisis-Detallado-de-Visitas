@@ -56,10 +56,9 @@ def cargar_datos_mipres(uploaded_file=None):
         return None
     try:
         df = pd.read_excel(source, sheet_name='Consolidado', header=1)
-        if 'Total general' in df.columns:
-            df['Total general'] = pd.to_numeric(df['Total general'], errors='coerce')
-        if '2026' in df.columns:
-            df['2026'] = pd.to_numeric(df['2026'], errors='coerce')
+        for col in ['2025', '2026', 'Total general', '2025.1', '2026.1', 'Total general.1', 'Médicos Visitados']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
         return df
     except Exception as e:
         return None
@@ -106,62 +105,111 @@ df_frec = cargar_datos_visitas(uploaded_visitas)
 df_mipres = cargar_datos_mipres(uploaded_mipres)
 
 # --- DEFINICIÓN DE PESTAÑAS PRINCIPALES ---
-tab_mipres, tab_visitas = st.tabs(["📊 Análisis Mipres & Oportunidades", "📈 Auditoría de Visitas & Paretización"])
+tab_mipres, tab_visitas = st.tabs(["📊 Inteligencia Mipres & Oportunidades", "📈 Auditoría de Visitas & Paretización"])
 
-# ==========================================
-# PESTAÑA 1: ANÁLISIS MIPRES & OPORTUNIDADES
-# ==========================================
+# =========================================================================
+# PESTAÑA 1: INTELIGENCIA MIPRES & OPORTUNIDADES COMERCIALES (ESTRATÉGICA)
+# =========================================================================
 with tab_mipres:
-    st.subheader("Inteligencia de Prescripción y Oportunidades (Consolidado Mipres)")
+    st.subheader("Tablero de Oportunidades Estratégicas y Potencial de Mercado (Base Mipres)")
     
     if df_mipres is not None:
         st.sidebar.markdown("---")
-        st.sidebar.subheader("Filtros Base Mipres")
+        st.sidebar.subheader("Filtros Estratégicos Mipres")
         
         regiones_mipres = sorted(df_mipres['Región'].dropna().unique()) if 'Región' in df_mipres.columns else []
         selected_regiones = st.sidebar.multiselect("Región Mipres", options=regiones_mipres, default=regiones_mipres, key="reg_mipres")
         
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
+        # KPIs Ejecutivos de Alto Impacto
         total_vol_2026 = df_mipres_filtered['2026'].sum(skipna=True) if '2026' in df_mipres_filtered.columns else 0
-        total_instituciones = len(df_mipres_filtered)
+        total_vol_2025 = df_mipres_filtered['2025'].sum(skipna=True) if '2025' in df_mipres_filtered.columns else 0
+        crecimiento_mercado = ((total_vol_2026 - total_vol_2025) / total_vol_2025 * 100) if total_vol_2025 > 0 else 0
         
+        # Porcentaje de instituciones sin visita comercial Growth
+        if 'Se visita Growth?' in df_mipres_filtered.columns:
+            sin_visita_count = len(df_mipres_filtered[df_mipres_filtered['Se visita Growth?'] == 'No'])
+            pct_sin_visita = (sin_visita_count / len(df_mipres_filtered) * 100) if len(df_mipres_filtered) > 0 else 0
+        else:
+            pct_sin_visita = 0
+
         kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric("Instituciones Analizadas (Mipres)", f"{total_instituciones:,}")
-        kpi2.metric("Volumen Prescripción 2026", f"{total_vol_2026:,.1f}")
-        
+        kpi1.metric("Volumen Total Mipres (2026)", f"{total_vol_2026:,.1f}", delta=f"{crecimiento_mercado:+.1f}% vs 2025")
+        kpi2.metric("Instituciones Analizadas", f"{len(df_mipres_filtered):,}")
+        kpi3.metric("Brecha de Cobertura (Sin Visita Growth)", f"{pct_sin_visita:.1f}%", delta_color="inverse")
+
         st.markdown("---")
-        st.subheader("Oportunidades Comerciales: Instituciones de Alto Volumen sin Visita Comercial")
+        
+        # 1. ANÁLISIS DE CUENTAS CLAVE NO VISITADAS (TOP 15 OPORTUNIDADES)
+        st.subheader("🎯 Top 15 Instituciones de Alto Volumen Comercial SIN Visita (Oportunidad de Apertura)")
         
         if 'Se visita Growth?' in df_mipres_filtered.columns and 'Total general' in df_mipres_filtered.columns:
-            df_oportunidades = df_mipres_filtered.sort_values(by='Total general', ascending=False, na_position='last').head(15)
+            # Filtrar exclusivamente las que NO se visitan
+            df_brecha = df_mipres_filtered[df_mipres_filtered['Se visita Growth?'] == 'No'].sort_values(by='Total general', ascending=False, na_position='last').head(15)
             
-            fig_mipres = px.bar(
-                df_oportunidades,
+            if not df_brecha.empty:
+                fig_brecha = px.bar(
+                    df_brecha,
+                    x='Prestador',
+                    y='Total general',
+                    text='Total general',
+                    template='plotly_dark',
+                    title="<b>Potencial No Capturado (Volumen Mipres en Instituciones No Visitadas)</b>",
+                    color_discrete_sequence=['#E6007E']
+                )
+                fig_brecha.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=11)
+                fig_brecha.update_layout(
+                    paper_bgcolor='#1C202C',
+                    plot_bgcolor='#2D3346',
+                    height=450,
+                    xaxis={'tickangle': -35},
+                    yaxis_title="Volumen Acumulado Mipres",
+                    margin=dict(t=50, b=120, l=40, r=20)
+                )
+                st.plotly_chart(fig_brecha, use_container_width=True)
+            else:
+                st.success("🎉 ¡Excelente cobertura! No hay instituciones en esta selección con estatus 'No' en visitas Growth.")
+
+        st.markdown("---")
+
+        # 2. COMPARATIVA DE CRECIMIENTO 2025 vs 2026 POR INSTITUCIÓN PARETO
+        st.subheader("📈 Dinámica de Prescripción: Comparativo de Volumen 2025 vs 2026")
+        
+        if '2025' in df_mipres_filtered.columns and '2026' in df_mipres_filtered.columns:
+            # Top 15 instituciones por volumen total
+            df_dinamica = df_mipres_filtered.sort_values(by='Total general', ascending=False, na_position='last').head(12)
+            
+            # Reestructurar para gráfico agrupado
+            df_melted = df_dinamica.melt(id_vars=['Prestador', 'Región'], value_vars=['2025', '2026'], var_name='Año', value_name='Volumen')
+            
+            fig_dinamica = px.bar(
+                df_melted,
                 x='Prestador',
-                y='Total general',
-                color='Se visita Growth?',
-                color_discrete_map={'Sí': '#0088FF', 'No': '#E6007E'},
+                y='Volumen',
+                color='Año',
+                barmode='group',
                 template='plotly_dark',
-                title="<b>Top Instituciones por Volumen Mipres y Estatus de Visita (Growth)</b>"
+                title="<b>Evolución del Volumen de Prescripción por Institución Líder</b>",
+                color_discrete_map={'2025': '#9AA5B1', '2026': '#0088FF'}
             )
-            fig_mipres.update_layout(
+            fig_dinamica.update_layout(
                 paper_bgcolor='#1C202C',
                 plot_bgcolor='#2D3346',
                 height=450,
                 xaxis={'tickangle': -35},
                 margin=dict(t=50, b=120, l=40, r=20)
             )
-            st.plotly_chart(fig_mipres, use_container_width=True)
-            
-        st.markdown("##### Detalle de Instituciones Mipres")
-        st.dataframe(df_mipres_filtered.head(100), use_container_width=True, hide_index=True)
-    else:
-        st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante el botón superior en la barra lateral.")
+            st.plotly_chart(fig_dinamica, use_container_width=True)
 
-# ==========================================
-# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN
-# ==========================================
+        st.markdown("##### Auditoría Completa de Oportunidades Mipres")
+        st.dataframe(df_mipres_filtered, use_container_width=True, hide_index=True)
+    else:
+        st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante la barra lateral para habilitar la inteligencia comercial.")
+
+# =========================================================================
+# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (PHARMADVISOR)
+# =========================================================================
 with tab_visitas:
     st.subheader("Auditoría Comercial y Frecuencia de Visita (Pharmadvisor)")
     
@@ -341,7 +389,7 @@ with tab_visitas:
             inst_summary_display['Best_Ranking'] = inst_summary_display['Best_Ranking'].apply(lambda x: int(x) if x < 999999 else 'N/A')
             inst_summary_display.columns = ['Institución', 'Mejor Ranking', 'Frecuencia Promedio', 'Cantidad de Médicos']
             inst_summary_display['Frecuencia Promedio'] = inst_summary_display['Frecuencia Promedio'].round(2)
-            st.dataframe(inst_summary_display, use_container_width=True, hide_index=True)
+            st.dataframe(inst_summary_display, use_category_width=True, hide_index=True)
         else:
             st.info("ℹ️ Por favor selecciona al menos una institución en el filtro superior para visualizar la comparativa.")
     else:
