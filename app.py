@@ -56,8 +56,9 @@ def cargar_datos_mipres(uploaded_file=None):
         return None
     try:
         df = pd.read_excel(source, sheet_name='Consolidado', header=1)
-        for col in ['2025', '2026', 'Total general', '2025.1', '2026.1', 'Total general.1', 'Médicos Visitados']:
-            if col in df.columns:
+        # Forzar conversión numérica en todas las columnas de años o totales
+        for col in df.columns:
+            if '2025' in str(col) or '2026' in str(col) or 'Total general' in str(col):
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         return df
     except Exception as e:
@@ -122,9 +123,12 @@ with tab_mipres:
         
         df_mipres_filtered = df_mipres[df_mipres['Región'].isin(selected_regiones)] if 'Región' in df_mipres.columns else df_mipres
         
-        # KPIs Ejecutivos de Alto Impacto
-        total_vol_2026 = df_mipres_filtered['2026'].sum(skipna=True) if '2026' in df_mipres_filtered.columns else 0
-        total_vol_2025 = df_mipres_filtered['2025'].sum(skipna=True) if '2025' in df_mipres_filtered.columns else 0
+        # Identificar columna exacta de 2026 y 2025
+        col_2026 = next((c for c in df_mipres_filtered.columns if '2026' in str(c) and '.' not in str(c)), '2026')
+        col_2025 = next((c for c in df_mipres_filtered.columns if '2025' in str(c) and '.' not in str(c)), '2025')
+        
+        total_vol_2026 = df_mipres_filtered[col_2026].sum(skipna=True) if col_2026 in df_mipres_filtered.columns else 0
+        total_vol_2025 = df_mipres_filtered[col_2025].sum(skipna=True) if col_2025 in df_mipres_filtered.columns else 0
         crecimiento_mercado = ((total_vol_2026 - total_vol_2025) / total_vol_2025 * 100) if total_vol_2025 > 0 else 0
         
         # Porcentaje de instituciones sin visita comercial Growth
@@ -145,7 +149,6 @@ with tab_mipres:
         st.subheader("🎯 Top 15 Instituciones de Alto Volumen Comercial SIN Visita (Oportunidad de Apertura)")
         
         if 'Se visita Growth?' in df_mipres_filtered.columns and 'Total general' in df_mipres_filtered.columns:
-            # Filtrar exclusivamente las que NO se visitan
             df_brecha = df_mipres_filtered[df_mipres_filtered['Se visita Growth?'] == 'No'].sort_values(by='Total general', ascending=False, na_position='last').head(15)
             
             if not df_brecha.empty:
@@ -176,12 +179,10 @@ with tab_mipres:
         # 2. COMPARATIVA DE CRECIMIENTO 2025 vs 2026 POR INSTITUCIÓN PARETO
         st.subheader("📈 Dinámica de Prescripción: Comparativo de Volumen 2025 vs 2026")
         
-        if '2025' in df_mipres_filtered.columns and '2026' in df_mipres_filtered.columns:
-            # Top 15 instituciones por volumen total
+        if col_2025 in df_mipres_filtered.columns and col_2026 in df_mipres_filtered.columns:
             df_dinamica = df_mipres_filtered.sort_values(by='Total general', ascending=False, na_position='last').head(12)
-            
-            # Reestructurar para gráfico agrupado
-            df_melted = df_dinamica.melt(id_vars=['Prestador', 'Región'], value_vars=['2025', '2026'], var_name='Año', value_name='Volumen')
+            df_melted = df_dinamica.melt(id_vars=['Prestador', 'Región'], value_vars=[col_2025, col_2026], var_name='Año', value_name='Volumen')
+            df_melted['Año'] = df_melted['Año'].astype(str).str.replace('.1', '', regex=False)
             
             fig_dinamica = px.bar(
                 df_melted,
@@ -389,7 +390,7 @@ with tab_visitas:
             inst_summary_display['Best_Ranking'] = inst_summary_display['Best_Ranking'].apply(lambda x: int(x) if x < 999999 else 'N/A')
             inst_summary_display.columns = ['Institución', 'Mejor Ranking', 'Frecuencia Promedio', 'Cantidad de Médicos']
             inst_summary_display['Frecuencia Promedio'] = inst_summary_display['Frecuencia Promedio'].round(2)
-            st.dataframe(inst_summary_display, use_category_width=True, hide_index=True)
+            st.dataframe(inst_summary_display, use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ Por favor selecciona al menos una institución en el filtro superior para visualizar la comparativa.")
     else:
