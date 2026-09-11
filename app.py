@@ -275,10 +275,10 @@ with tab_mipres:
         st.warning("⚠️ Por favor carga el archivo 'Base Mipres.xlsx' mediante el segundo cargador en la barra lateral.")
 
 # =========================================================================
-# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (INDICADOR DE FRECUENCIA)
+# PESTAÑA 2: AUDITORÍA DE VISITAS & PARETIZACIÓN (FRECUENCIA Y COBERTURA)
 # =========================================================================
 with tab_visitas:
-    st.subheader("Auditoría Comercial y Frecuencia de Visita (Pharmadvisor)")
+    st.subheader("Auditoría Comercial y Frecuencia de Visita (Indicador de Frecuencia)")
     if df_frec is not None:
         distritos_disponibles = sorted(df_frec['Distrito'].dropna().unique()) if 'Distrito' in df_frec.columns else []
         selected_distritos = st.sidebar.multiselect("Distrito (Pestaña 2)", options=distritos_disponibles, default=distritos_disponibles, key="dist_ph")
@@ -307,6 +307,21 @@ with tab_visitas:
             st.plotly_chart(estilizar_grafica_con_cantidad(df_filtered, "<b>2. Mercado Allergy</b>", 'Torta_Allergy'), use_container_width=True)
         with col3:
             st.plotly_chart(estilizar_grafica_con_cantidad(df_filtered, "<b>3. Mercados Combinados</b>", 'Torta_Comb'), use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("📊 Indicadores de Frecuencia y Cobertura por Distrito")
+        if 'Frecuencia' in df_filtered.columns or 'Visitas' in df_filtered.columns or 'Distrito' in df_filtered.columns:
+            frec_col = 'Frecuencia' if 'Frecuencia' in df_filtered.columns else ('Visitas' if 'Visitas' in df_filtered.columns else None)
+            if frec_col:
+                df_frec_dist = df_filtered.groupby('Distrito')[frec_col].mean().reset_index()
+                fig_frec_dist = px.bar(
+                    df_frec_dist, x='Distrito', y=frec_col, text=frec_col,
+                    template='plotly_dark', title=f"<b>Promedio de {frec_col} por Distrito</b>",
+                    color=frec_col, color_continuous_scale=['#0088FF', '#E6007E']
+                )
+                fig_frec_dist.update_traces(texttemplate='%{text:.2f}', textposition='outside', textfont_size=11)
+                fig_frec_dist.update_layout(paper_bgcolor='#1C202C', plot_bgcolor='#2D3346', height=420, margin=dict(t=50, b=40, l=40, r=20))
+                st.plotly_chart(fig_frec_dist, use_container_width=True)
     else:
         st.warning("⚠️ Por favor carga el archivo **Indicador Frecuencia** en el primer cargador de la barra lateral.")
 
