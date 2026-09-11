@@ -215,14 +215,14 @@ with tab_mipres:
         st.markdown("<span style='color: #9AA5B1; font-size: 12px; display: block; margin-top: 15px;'>* Nota analítica: El total del mercado excluye las instituciones no aplicables para el segmento. Los datos de 2026 corresponden al primer semestre (H1).</span>", unsafe_allow_html=True)
         st.markdown("---")
         
-        # 1. ANÁLISIS DE CUENTAS CLAVE PARETO NO VISITADAS
-        st.subheader(f"🎯 Top 15 Instituciones Pareto de Alto Volumen SIN Visita ({mercado_seleccionado})")
+        # 1. ANÁLISIS DE CUENTAS CLAVE PARETO NO VISITADAS (TOP 20)
+        st.subheader(f"🎯 Top 20 Instituciones Pareto de Alto Volumen SIN Visita ({mercado_seleccionado})")
         
         if col_pareto in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
             df_brecha_pareto = df_mipres_filtered[
                 (df_mipres_filtered[col_pareto] == 'Sí') & 
                 (df_mipres_filtered[col_visita] == 'No')
-            ].sort_values(by=col_vol_2026, ascending=False, na_position='last').head(15)
+            ].sort_values(by=col_vol_2026, ascending=False, na_position='last').head(20)
             
             if not df_brecha_pareto.empty:
                 fig_brecha = px.bar(
@@ -231,17 +231,17 @@ with tab_mipres:
                     y=col_vol_2026,
                     text=col_vol_2026,
                     template='plotly_dark',
-                    title=f"<b>Potencial en Instituciones Pareto No Visitadas ({mercado_seleccionado})</b>",
+                    title=f"<b>Top 20 Potencial en Instituciones Pareto No Visitadas ({mercado_seleccionado})</b>",
                     color_discrete_sequence=['#E6007E']
                 )
                 fig_brecha.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=11)
                 fig_brecha.update_layout(
                     paper_bgcolor='#1C202C',
                     plot_bgcolor='#2D3346',
-                    height=450,
+                    height=480,
                     xaxis={'tickangle': -35},
                     yaxis_title="Volumen Semestral Mipres (2026 H1)",
-                    margin=dict(t=50, b=120, l=40, r=20)
+                    margin=dict(t=50, b=130, l=40, r=20)
                 )
                 st.plotly_chart(fig_brecha, use_container_width=True)
             else:
@@ -249,12 +249,11 @@ with tab_mipres:
 
         st.markdown("---")
 
-        # 2. MATRIZ DE CRUCE: TOP INSTITUCIONES POR VOLUMEN Mipres vs. ESTATUS DE VISITA (Pharmadvisor)
-        st.subheader(f"📊 Top Instituciones por Volumen Mipres y su Estatus de Visita ({mercado_seleccionado})")
+        # 2. MATRIZ DE CRUCE: TOP 20 INSTITUCIONES POR VOLUMEN Mipres vs. ESTATUS DE VISITA
+        st.subheader(f"📊 Top 20 Instituciones por Volumen Mipres y su Estatus de Visita ({mercado_seleccionado})")
         
         if col_vol_2026 in df_mipres_filtered.columns and col_visita in df_mipres_filtered.columns:
-            df_cruce = df_mipres_filtered.sort_values(by=col_vol_2026, ascending=False, na_position='last').head(15).copy()
-            # Renombrar estatus de visita para mejor lectura en la leyenda
+            df_cruce = df_mipres_filtered.sort_values(by=col_vol_2026, ascending=False, na_position='last').head(20).copy()
             df_cruce['Estatus Visita Pharmadvisor'] = df_cruce[col_visita].apply(lambda x: 'Visitada' if str(x).strip().lower() == 'sí' else 'No Visitada')
             
             fig_cruce = px.bar(
@@ -264,17 +263,17 @@ with tab_mipres:
                 color='Estatus Visita Pharmadvisor',
                 text=col_vol_2026,
                 template='plotly_dark',
-                title=f"<b>Volumen H1 2026 y Cobertura Comercial Pharmadvisor</b>",
+                title=f"<b>Top 20 Volumen H1 2026 y Cobertura Comercial Pharmadvisor</b>",
                 color_discrete_map={'Visitada': '#0088FF', 'No Visitada': '#E6007E'}
             )
             fig_cruce.update_traces(texttemplate='%{text:,.0f}', textposition='outside', textfont_size=10)
             fig_cruce.update_layout(
                 paper_bgcolor='#1C202C',
                 plot_bgcolor='#2D3346',
-                height=480,
+                height=500,
                 xaxis={'tickangle': -35},
                 yaxis_title="Volumen H1 2026",
-                margin=dict(t=50, b=130, l=40, r=20),
+                margin=dict(t=50, b=140, l=40, r=20),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig_cruce, use_container_width=True)
